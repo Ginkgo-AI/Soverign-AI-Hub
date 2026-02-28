@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { apiJson } from "@/lib/api";
+import { Shield } from "lucide-react";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -41,11 +42,30 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center h-full">
-      <div className="w-full max-w-sm">
-        <h2 className="text-2xl font-bold text-center mb-6">
+    <div className="flex items-center justify-center h-full bg-gradient-subtle relative overflow-hidden">
+      {/* Background pattern */}
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle, var(--color-text) 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
+        }}
+      />
+
+      <div className="w-full max-w-sm relative z-10">
+        <div className="flex justify-center mb-4">
+          <div className="p-3 rounded-full bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20">
+            <Shield size={28} className="text-[var(--color-accent)]" />
+          </div>
+        </div>
+
+        <h2 className="text-2xl font-bold text-center mb-1">
           Sovereign AI Hub
         </h2>
+        <p className="text-xs text-[var(--color-text-muted)] text-center mb-6">
+          Secure, air-gapped AI platform
+        </p>
 
         <div className="flex mb-6 border border-[var(--color-border)] rounded-lg overflow-hidden">
           <button

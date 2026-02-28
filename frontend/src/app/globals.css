@@ -18,3 +18,51 @@
   --color-cui: #f59e0b;
   --color-secret: #ef4444;
 }
+
+/* Focus states */
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 1px var(--color-accent) / 0.2;
+}
+
+/* Transitions */
+a,
+button {
+  transition: color 0.15s ease, background-color 0.15s ease,
+    border-color 0.15s ease, opacity 0.15s ease;
+}
+
+/* Card hover glow */
+.card-glow:hover {
+  box-shadow: 0 0 20px -4px var(--color-accent) / 0.15;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+
+/* Subtle gradient for page backgrounds */
+.bg-gradient-subtle {
+  background: linear-gradient(
+    180deg,
+    var(--color-bg) 0%,
+    #0d0d12 100%
+  );
+}

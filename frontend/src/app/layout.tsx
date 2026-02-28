@@ -1,6 +1,22 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import ClassificationBanner from "@/components/shared/ClassificationBanner";
+import {
+  MessageSquare,
+  Code2,
+  Database,
+  Bot,
+  GitBranch,
+  Boxes,
+  Shield,
+  Users,
+  FileText,
+  Lock,
+  ClipboardCheck,
+  Radio,
+  Settings,
+  User,
+} from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Sovereign AI Hub",
@@ -42,44 +58,62 @@ function Sidebar() {
         </a>
       </div>
       <nav className="flex-1 p-2 space-y-0.5">
-        <NavItem href="/chat" label="Chat" />
-        <NavItem href="/code" label="Code" />
-        <NavItem href="/collections" label="Knowledge Base" />
-        <NavItem href="/agents" label="Agents" />
-        <NavItem href="/workflows" label="Workflows" />
-        <NavItem href="/models" label="Models" />
+        <NavItem href="/chat" label="Chat" icon={<MessageSquare size={16} />} />
+        <NavItem href="/code" label="Code" icon={<Code2 size={16} />} />
+        <NavItem href="/collections" label="Knowledge Base" icon={<Database size={16} />} />
+        <NavItem href="/agents" label="Agents" icon={<Bot size={16} />} />
+        <NavItem href="/workflows" label="Workflows" icon={<GitBranch size={16} />} />
+        <NavItem href="/models" label="Models" icon={<Boxes size={16} />} />
       </nav>
       <div className="p-2 border-t border-[var(--color-border)] space-y-0.5">
-        <NavItem href="/admin" label="Admin" />
-        <SubNavItem href="/admin/users" label="Users" />
-        <SubNavItem href="/admin/audit" label="Audit" />
-        <SubNavItem href="/admin/security" label="Security" />
-        <SubNavItem href="/admin/compliance" label="Compliance" />
-        <SubNavItem href="/admin/edge" label="Edge Devices" />
-        <NavItem href="/settings" label="Settings" />
-        <NavItem href="/login" label="Account" />
+        <NavItem href="/admin" label="Admin" icon={<Shield size={16} />} />
+        <SubNavItem href="/admin/users" label="Users" icon={<Users size={14} />} />
+        <SubNavItem href="/admin/audit" label="Audit" icon={<FileText size={14} />} />
+        <SubNavItem href="/admin/security" label="Security" icon={<Lock size={14} />} />
+        <SubNavItem href="/admin/compliance" label="Compliance" icon={<ClipboardCheck size={14} />} />
+        <SubNavItem href="/admin/edge" label="Edge Devices" icon={<Radio size={14} />} />
+        <NavItem href="/settings" label="Settings" icon={<Settings size={16} />} />
+        <NavItem href="/login" label="Account" icon={<User size={16} />} />
       </div>
     </aside>
   );
 }
 
-function NavItem({ href, label }: { href: string; label: string }) {
+function NavItem({
+  href,
+  label,
+  icon,
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+}) {
   return (
     <a
       href={href}
-      className="block px-3 py-2 rounded-md text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+      className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
     >
+      <span className="shrink-0 opacity-70">{icon}</span>
       {label}
     </a>
   );
 }
 
-function SubNavItem({ href, label }: { href: string; label: string }) {
+function SubNavItem({
+  href,
+  label,
+  icon,
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+}) {
   return (
     <a
       href={href}
-      className="block pl-7 pr-3 py-1.5 rounded-md text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+      className="flex items-center gap-2 pl-7 pr-3 py-1.5 rounded-md text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
     >
+      <span className="shrink-0 opacity-60">{icon}</span>
       {label}
     </a>
   );
