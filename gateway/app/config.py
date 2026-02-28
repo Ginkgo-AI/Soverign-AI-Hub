@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     gateway_secret_key: str = "dev-secret-change-in-production"
     gateway_cors_origins: str = "http://localhost:3000"
 
+    # Embedding
+    embedding_model: str = "nomic-embed-text"
+    embedding_backend: str = "vllm"
+
+    # RAG defaults
+    default_chunk_size: int = 512
+    default_chunk_overlap: int = 50
+
     # Modes
     airgap_mode: bool = False
 

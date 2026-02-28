@@ -16,6 +16,7 @@ from app.routers import (
     embeddings,
     health,
     models,
+    search,
     system_prompts,
 )
 
@@ -27,11 +28,19 @@ async def lifespan(app: FastAPI):
 
     async with engine.begin() as conn:
         await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
+
+    # Register built-in agent tools
+    from app.services.tool_executor import register_builtin_tools
+
+    register_builtin_tools()
+
     yield
     # Shutdown
     from app.services.llm import llm_backend
+    from app.services.vector_store import vector_store
 
     await llm_backend.close()
+    await vector_store.close()
     await engine.dispose()
 
 
@@ -69,5 +78,6 @@ app.include_router(conversations.router, prefix="/api", tags=["Conversations"])
 app.include_router(system_prompts.router, prefix="/api", tags=["System Prompts"])
 app.include_router(collections.router, prefix="/api", tags=["Collections"])
 app.include_router(documents.router, prefix="/api", tags=["Documents"])
+app.include_router(search.router, prefix="/api", tags=["Search"])
 app.include_router(agents.router, prefix="/api", tags=["Agents"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
