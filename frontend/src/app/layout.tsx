@@ -55,6 +55,7 @@ function Sidebar() {
         <SubNavItem href="/admin/audit" label="Audit" />
         <SubNavItem href="/admin/security" label="Security" />
         <SubNavItem href="/admin/compliance" label="Compliance" />
+        <SubNavItem href="/admin/edge" label="Edge Devices" />
         <NavItem href="/settings" label="Settings" />
         <NavItem href="/login" label="Account" />
       </div>

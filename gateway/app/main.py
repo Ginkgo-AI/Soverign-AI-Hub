@@ -15,6 +15,7 @@ from app.routers import (
     collections,
     conversations,
     documents,
+    edge,
     embeddings,
     health,
     images,
@@ -116,3 +117,6 @@ app.include_router(code.router, prefix="/api", tags=["Code"])
 # Model Management & Fine-Tuning endpoints (Phase 7)
 app.include_router(models.router, prefix="/api", tags=["Model Registry"])
 app.include_router(training.router, prefix="/api", tags=["Training"])
+
+# Edge Device Management endpoints (Phase 8)
+app.include_router(edge.router, prefix="/api", tags=["Edge Devices"])

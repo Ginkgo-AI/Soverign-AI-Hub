@@ -89,9 +89,48 @@ echo "Installation complete. Run: docker compose up -d"
 INSTALL_EOF
 chmod +x "$OUTPUT_DIR/install.sh"
 
-# 6. Package everything
+# 6. Include edge agent binaries (Phase 8)
 echo ""
-echo "Step 5: Creating bundle..."
+echo "Step 5: Including edge agent binaries..."
+EDGE_DEPLOY_DIR="${PROJECT_DIR}/deploy/edge"
+if [ -d "$EDGE_DEPLOY_DIR" ] && ls "$EDGE_DEPLOY_DIR"/sovereign-edge-* &>/dev/null 2>&1; then
+    mkdir -p "$OUTPUT_DIR/edge"
+    cp "$EDGE_DEPLOY_DIR"/sovereign-edge-* "$OUTPUT_DIR/edge/"
+    cp "$EDGE_DEPLOY_DIR"/install.sh "$OUTPUT_DIR/edge/" 2>/dev/null || true
+    cp "$EDGE_DEPLOY_DIR"/config.yaml.example "$OUTPUT_DIR/edge/" 2>/dev/null || true
+    cp "$EDGE_DEPLOY_DIR"/checksums.sha256 "$OUTPUT_DIR/edge/" 2>/dev/null || true
+    echo "  Edge binaries included"
+else
+    echo "  WARNING: Edge binaries not found. Run scripts/build-edge.sh first."
+    echo "  Attempting to build edge agent now..."
+    if command -v go &>/dev/null; then
+        bash "$PROJECT_DIR/scripts/build-edge.sh" && {
+            mkdir -p "$OUTPUT_DIR/edge"
+            cp "$EDGE_DEPLOY_DIR"/sovereign-edge-* "$OUTPUT_DIR/edge/"
+            cp "$EDGE_DEPLOY_DIR"/install.sh "$OUTPUT_DIR/edge/" 2>/dev/null || true
+            cp "$EDGE_DEPLOY_DIR"/config.yaml.example "$OUTPUT_DIR/edge/" 2>/dev/null || true
+            echo "  Edge binaries built and included"
+        } || echo "  Edge agent build failed — continuing without edge binaries"
+    else
+        echo "  Go not installed — skipping edge agent build"
+    fi
+fi
+
+# 7. Include small quantized models for edge deployment
+echo ""
+echo "Step 6: Checking for edge-ready GGUF models..."
+EDGE_MODELS_DIR="${PROJECT_DIR}/models/edge"
+if [ -d "$EDGE_MODELS_DIR" ] && ls "$EDGE_MODELS_DIR"/*.gguf &>/dev/null 2>&1; then
+    mkdir -p "$OUTPUT_DIR/edge/models"
+    cp "$EDGE_MODELS_DIR"/*.gguf "$OUTPUT_DIR/edge/models/"
+    echo "  Edge models included"
+else
+    echo "  No edge-specific models found in models/edge/ — skipping"
+fi
+
+# 8. Package everything
+echo ""
+echo "Step 7: Creating bundle..."
 tar -czf "$PROJECT_DIR/$OUTPUT_FILE" -C "$OUTPUT_DIR" .
 
 BUNDLE_SIZE=$(du -sh "$PROJECT_DIR/$OUTPUT_FILE" | cut -f1)
