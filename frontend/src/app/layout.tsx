@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import ClassificationBanner from "@/components/shared/ClassificationBanner";
 
 export const metadata: Metadata = {
   title: "Sovereign AI Hub",
@@ -14,7 +15,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="bg-[var(--color-bg)] text-[var(--color-text)] min-h-screen">
-        <div className="flex h-screen">
+        <ClassificationBanner />
+        <div className="flex h-screen" style={{ paddingBottom: "22px" }}>
           {/* Global sidebar — hidden on chat page (which has its own) */}
           <Sidebar />
 
@@ -49,6 +51,10 @@ function Sidebar() {
       </nav>
       <div className="p-2 border-t border-[var(--color-border)] space-y-0.5">
         <NavItem href="/admin" label="Admin" />
+        <SubNavItem href="/admin/users" label="Users" />
+        <SubNavItem href="/admin/audit" label="Audit" />
+        <SubNavItem href="/admin/security" label="Security" />
+        <SubNavItem href="/admin/compliance" label="Compliance" />
         <NavItem href="/settings" label="Settings" />
         <NavItem href="/login" label="Account" />
       </div>
@@ -61,6 +67,17 @@ function NavItem({ href, label }: { href: string; label: string }) {
     <a
       href={href}
       className="block px-3 py-2 rounded-md text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+    >
+      {label}
+    </a>
+  );
+}
+
+function SubNavItem({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      className="block pl-7 pr-3 py-1.5 rounded-md text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
     >
       {label}
     </a>

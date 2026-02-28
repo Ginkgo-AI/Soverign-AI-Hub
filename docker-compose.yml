@@ -163,6 +163,16 @@ services:
       GATEWAY_SECRET_KEY: ${GATEWAY_SECRET_KEY:-dev-secret-change-in-production}
       GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-http://localhost:3000}
       AIRGAP_MODE: ${AIRGAP_MODE:-false}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sovereign-ai}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      SESSION_TIMEOUT_MINUTES: ${SESSION_TIMEOUT_MINUTES:-1440}
+      MAX_CONCURRENT_SESSIONS: ${MAX_CONCURRENT_SESSIONS:-5}
+      CLASSIFICATION_LEVELS: ${CLASSIFICATION_LEVELS:-UNCLASSIFIED,CUI,FOUO,SECRET}
+      AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-365}
+      SIEM_ENDPOINT: ${SIEM_ENDPOINT:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -288,6 +298,34 @@ services:
       - multimodal
       - gpu
 
+  # ---------------------------------------------------------------------------
+  # Keycloak — Identity & Access Management (optional, Phase 6)
+  # ---------------------------------------------------------------------------
+  keycloak:
+    <<: *common
+    image: quay.io/keycloak/keycloak:latest
+    container_name: sov-keycloak
+    ports:
+      - "8443:8443"
+      - "8080:8080"
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-changeme_in_production}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sovereign_ai}
+      KC_DB_USERNAME: ${POSTGRES_USER:-sovereign}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    command: start-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    profiles:
+      - security
+
 volumes:
   pgdata:
     driver: local
@@ -302,4 +340,6 @@ volumes:
   piper_cache:
     driver: local
   comfyui_output:
+    driver: local
+  keycloak_data:
     driver: local

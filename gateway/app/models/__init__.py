@@ -6,6 +6,7 @@ from app.models.collection import Collection, CollectionPermission, Chunk, Docum
 from app.models.conversation import Conversation, Message
 from app.models.model_registry import Model, ModelEvaluation
 from app.models.system_prompt import SystemPrompt
+from app.models.training import ABTest, TrainingDataset, TrainingJob
 from app.models.user import User
 from app.models.workflow import WorkflowDefinition, WorkflowRun
 
@@ -30,4 +31,7 @@ __all__ = [
     "CodeWorkspace",
     "CodeSession",
     "CodeExecution",
+    "TrainingJob",
+    "TrainingDataset",
+    "ABTest",
 ]

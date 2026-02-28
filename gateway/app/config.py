@@ -55,6 +55,30 @@ class Settings(BaseSettings):
     # Modes
     airgap_mode: bool = False
 
+    # --- Phase 6: Security, Compliance & Governance ---
+
+    # Keycloak OIDC (optional — system works without it)
+    keycloak_url: str = ""
+    keycloak_realm: str = ""
+    keycloak_client_id: str = "sovereign-ai"
+    keycloak_client_secret: str = ""
+
+    # Encryption
+    encryption_key: str = ""  # defaults to gateway_secret_key if empty
+
+    # Session management
+    session_timeout_minutes: int = 1440  # 24 hours
+    max_concurrent_sessions: int = 5
+
+    # Classification
+    classification_levels: str = "UNCLASSIFIED,CUI,FOUO,SECRET"
+
+    # Audit
+    audit_retention_days: int = 365
+
+    # SIEM integration (optional syslog/webhook URL)
+    siem_endpoint: str = ""
+
     @property
     def database_url(self) -> str:
         return (

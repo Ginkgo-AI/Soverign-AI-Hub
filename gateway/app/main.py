@@ -21,6 +21,7 @@ from app.routers import (
     models,
     search,
     system_prompts,
+    training,
     vision,
 )
 
@@ -45,6 +46,11 @@ async def lifespan(app: FastAPI):
     from app.services.whisper import whisper_client
     from app.services.tts import tts_client
     from app.services.image_gen import image_gen_client
+
+    # Flush any remaining audit records
+    from app.services.audit import _flush_buffer
+
+    await _flush_buffer()
 
     await llm_backend.close()
     await vector_store.close()
@@ -71,15 +77,21 @@ app.add_middleware(
     expose_headers=["X-Conversation-ID", "X-Request-ID"],
 )
 
-# Audit logging
+# Audit logging (Phase 6: full structured audit to PostgreSQL)
 app.add_middleware(AuditMiddleware)
+
+# Air-gap enforcement (Phase 6)
+if settings.airgap_mode:
+    from app.middleware.airgap import AirgapMiddleware
+
+    app.add_middleware(AirgapMiddleware)
 
 # Auth
 app.include_router(auth.router, prefix="/api", tags=["Auth"])
 
 # OpenAI-compatible endpoints
 app.include_router(chat.router, prefix="/v1", tags=["Chat"])
-app.include_router(models.router, prefix="/v1", tags=["Models"])
+app.include_router(models.v1_router, prefix="/v1", tags=["Models"])
 app.include_router(embeddings.router, prefix="/v1", tags=["Embeddings"])
 
 # Application endpoints
@@ -100,3 +112,7 @@ app.include_router(images.gallery_router, prefix="/api", tags=["Images"])
 
 # Code Assistant endpoints (Phase 5)
 app.include_router(code.router, prefix="/api", tags=["Code"])
+
+# Model Management & Fine-Tuning endpoints (Phase 7)
+app.include_router(models.router, prefix="/api", tags=["Model Registry"])
+app.include_router(training.router, prefix="/api", tags=["Training"])
