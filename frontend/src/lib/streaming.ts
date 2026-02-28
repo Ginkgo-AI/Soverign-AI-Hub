@@ -10,44 +10,69 @@ export interface ChatMessage {
 export interface StreamCallbacks {
   onToken: (token: string) => void;
   onToolCall?: (toolCall: unknown) => void;
-  onDone: () => void;
+  onDone: (conversationId?: string) => void;
   onError: (error: Error) => void;
+}
+
+export interface StreamOptions {
+  model?: string;
+  backend?: string;
+  temperature?: number;
+  maxTokens?: number;
+  tools?: unknown[];
+  conversationId?: string;
+  systemPrompt?: string;
+  maxContextTokens?: number;
 }
 
 export async function streamChat(
   messages: ChatMessage[],
   callbacks: StreamCallbacks,
-  options: {
-    model?: string;
-    backend?: string;
-    temperature?: number;
-    maxTokens?: number;
-    tools?: unknown[];
-  } = {}
+  options: StreamOptions = {}
 ) {
-  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
-  const response = await fetch(`${API_URL}/v1/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({
-      messages,
-      stream: true,
-      model: options.model || "",
-      backend: options.backend || "vllm",
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 4096,
-      tools: options.tools,
-    }),
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
 
-  if (!response.ok) {
-    callbacks.onError(new Error(`Stream error: ${response.status}`));
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/v1/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        messages,
+        stream: true,
+        model: options.model || "",
+        backend: options.backend || "vllm",
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.maxTokens ?? 4096,
+        tools: options.tools,
+        conversation_id: options.conversationId,
+        system_prompt: options.systemPrompt,
+        max_context_tokens: options.maxContextTokens ?? 8192,
+      }),
+    });
+  } catch (err) {
+    callbacks.onError(
+      err instanceof Error ? err : new Error("Network error — is the API gateway running?")
+    );
     return;
   }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => response.statusText);
+    callbacks.onError(new Error(`API error ${response.status}: ${text}`));
+    return;
+  }
+
+  // Capture conversation ID from response header
+  const conversationId = response.headers.get("X-Conversation-ID") || undefined;
 
   const reader = response.body?.getReader();
   if (!reader) {
@@ -71,7 +96,7 @@ export async function streamChat(
         if (!line.startsWith("data: ")) continue;
         const data = line.slice(6).trim();
         if (data === "[DONE]") {
-          callbacks.onDone();
+          callbacks.onDone(conversationId);
           return;
         }
 
@@ -89,8 +114,10 @@ export async function streamChat(
         }
       }
     }
-    callbacks.onDone();
+    callbacks.onDone(conversationId);
   } catch (error) {
-    callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+    callbacks.onError(
+      error instanceof Error ? error : new Error(String(error))
+    );
   }
 }
