@@ -1,0 +1,228 @@
+version: "3.9"
+
+x-common: &common
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — Primary data store
+  # ---------------------------------------------------------------------------
+  postgres:
+    <<: *common
+    image: postgres:16-alpine
+    container_name: sov-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sovereign_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-sovereign}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./gateway/alembic/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sovereign} -d ${POSTGRES_DB:-sovereign_ai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Qdrant — Vector store
+  # ---------------------------------------------------------------------------
+  qdrant:
+    <<: *common
+    image: qdrant/qdrant:v1.13.2
+    container_name: sov-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Redis — Message queue, caching
+  # ---------------------------------------------------------------------------
+  redis:
+    <<: *common
+    image: redis:7-alpine
+    container_name: sov-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # vLLM — Production LLM serving (GPU)
+  # ---------------------------------------------------------------------------
+  vllm:
+    <<: *common
+    image: vllm/vllm-openai:latest
+    container_name: sov-vllm
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/models:ro
+      - vllm_cache:/root/.cache
+    environment:
+      VLLM_API_KEY: ""
+    command: >
+      --model ${VLLM_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+      --port 8000
+      --host 0.0.0.0
+      --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.9}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-8192}
+      --enable-auto-tool-choice
+      --tool-call-parser llama3_json
+      --chat-template /models/tool_chat_template.jinja
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    profiles:
+      - gpu
+
+  # ---------------------------------------------------------------------------
+  # llama.cpp — Laptop/CPU LLM serving (fallback)
+  # ---------------------------------------------------------------------------
+  llama-cpp:
+    <<: *common
+    build:
+      context: ./deploy/llama-cpp
+      dockerfile: Dockerfile
+    container_name: sov-llama-cpp
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./models:/models:ro
+    command: >
+      --server
+      --host 0.0.0.0
+      --port 8080
+      --model /models/llm/default.gguf
+      --ctx-size ${LLAMA_CPP_CONTEXT_SIZE:-8192}
+      --n-gpu-layers ${LLAMA_CPP_GPU_LAYERS:-99}
+      --parallel 2
+      --cont-batching
+    profiles:
+      - cpu
+
+  # ---------------------------------------------------------------------------
+  # Gateway — FastAPI API server
+  # ---------------------------------------------------------------------------
+  gateway:
+    <<: *common
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: sov-gateway
+    ports:
+      - "8888:8888"
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-sovereign_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-sovereign}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      VLLM_HOST: ${VLLM_HOST:-vllm}
+      VLLM_PORT: ${VLLM_PORT:-8000}
+      LLAMA_CPP_HOST: ${LLAMA_CPP_HOST:-llama-cpp}
+      LLAMA_CPP_PORT: ${LLAMA_CPP_PORT:-8080}
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_PORT: 8888
+      GATEWAY_SECRET_KEY: ${GATEWAY_SECRET_KEY:-dev-secret-change-in-production}
+      GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-http://localhost:3000}
+      AIRGAP_MODE: ${AIRGAP_MODE:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - file_storage:/data/files
+
+  # ---------------------------------------------------------------------------
+  # Frontend — Next.js application
+  # ---------------------------------------------------------------------------
+  frontend:
+    <<: *common
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sov-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8888}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Sovereign AI Hub}
+    depends_on:
+      - gateway
+
+  # ---------------------------------------------------------------------------
+  # Workers — Background document processing
+  # ---------------------------------------------------------------------------
+  workers:
+    <<: *common
+    build:
+      context: ./workers
+      dockerfile: Dockerfile
+    container_name: sov-workers
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-sovereign_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-sovereign}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MODEL_STORE_PATH: /models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./models:/models:ro
+      - file_storage:/data/files
+
+volumes:
+  pgdata:
+    driver: local
+  qdrant_data:
+    driver: local
+  redis_data:
+    driver: local
+  vllm_cache:
+    driver: local
+  file_storage:
+    driver: local

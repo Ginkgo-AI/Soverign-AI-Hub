@@ -1,0 +1,61 @@
+# Environment
+.env
+.env.local
+.env.production
+
+# Models (large binary files)
+models/llm/*
+models/embedding/*
+models/vision/*
+models/whisper/*
+models/tts/*
+models/diffusion/*
+!models/**/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Node
+node_modules/
+.next/
+out/
+
+# Rust
+agent-runtime/target/
+
+# Docker
+*.tar.gz
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database
+*.sql.bak
+pgdata/
+
+# Air-gap bundles
+deploy/airgap/container-images/*.tar
+
+# Test coverage
+.coverage
+htmlcov/
+.nyc_output/
+coverage/
