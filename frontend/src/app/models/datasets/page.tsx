@@ -192,9 +192,9 @@ export default function DatasetsPage() {
                       <div className="flex gap-3 mt-1 text-xs text-[var(--color-text-muted)]">
                         <span>{ds.sample_count} samples</span>
                         <span>{ds.format}</span>
-                        {tokenStats.avg_token_length && (
+                        {tokenStats.avg_token_length ? (
                           <span>~{Math.round(Number(tokenStats.avg_token_length))} avg tokens</span>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                     <div className="flex gap-2 items-center">
@@ -248,7 +248,7 @@ export default function DatasetsPage() {
                           <span className="font-medium">{stats.max_token_length}</span>
                         </div>
                       </div>
-                      {stats.token_distribution && (
+                      {stats.token_distribution ? (
                         <div className="mt-2">
                           <p className="text-xs text-[var(--color-text-muted)] mb-1">Token Length Distribution</p>
                           <div className="flex gap-1 items-end h-16">
@@ -269,7 +269,7 @@ export default function DatasetsPage() {
                             })}
                           </div>
                         </div>
-                      )}
+                      ) : null}
                       <div className="mt-2 text-xs text-[var(--color-text-muted)]">
                         Format: {stats.format_detected} | Fields: {stats.schema_fields.join(", ")}
                       </div>

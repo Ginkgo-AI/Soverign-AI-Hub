@@ -39,7 +39,7 @@ class EdgeDeviceOut(BaseModel):
 class EdgeDeviceRegisterOut(EdgeDeviceOut):
     """Returned only at registration — includes the plaintext API key."""
 
-    api_key: str
+    api_key: str = ""
 
 
 class EdgeDeviceListOut(BaseModel):

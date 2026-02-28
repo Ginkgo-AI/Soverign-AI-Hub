@@ -5,14 +5,24 @@ description = "Background document processing workers"
 requires-python = ">=3.11"
 dependencies = [
     "redis>=5.2.0",
-    "sqlalchemy[asyncio]>=2.0.36",
-    "asyncpg>=0.30.0",
+    "sqlalchemy>=2.0.36",
+    "psycopg2-binary>=2.9.0",
     "qdrant-client>=1.12.0",
     "pypdf>=5.0.0",
     "python-docx>=1.1.0",
     "openpyxl>=3.1.0",
     "pytesseract>=0.3.13",
-    "sentence-transformers>=3.3.0",
+    "httpx>=0.28.0",
+]
+
+[project.optional-dependencies]
+training = [
+    "torch>=2.0.0",
+    "transformers>=4.40.0",
+    "peft>=0.10.0",
+    "datasets>=2.18.0",
+    "trl>=0.8.0",
+    "bitsandbytes>=0.43.0",
 ]
 
 [build-system]

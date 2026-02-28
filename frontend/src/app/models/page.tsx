@@ -57,25 +57,25 @@ function ModelDetailModal({
             <span className="break-all font-mono text-xs">{model.file_path}</span>
           </div>
 
-          {params.param_count && (
+          {params.param_count ? (
             <div className="flex justify-between">
               <span className="text-[var(--color-text-muted)]">Parameters</span>
               <span>{String(params.param_count)}</span>
             </div>
-          )}
-          {params.context_window && (
+          ) : null}
+          {params.context_window ? (
             <div className="flex justify-between">
               <span className="text-[var(--color-text-muted)]">Context Window</span>
               <span>{String(params.context_window)} tokens</span>
             </div>
-          )}
-          {params.file_size && (
+          ) : null}
+          {params.file_size ? (
             <div className="flex justify-between">
               <span className="text-[var(--color-text-muted)]">File Size</span>
               <span>{(Number(params.file_size) / (1024 * 1024 * 1024)).toFixed(2)} GB</span>
             </div>
-          )}
-          {params.features && Array.isArray(params.features) && (
+          ) : null}
+          {params.features && Array.isArray(params.features) ? (
             <div>
               <span className="text-[var(--color-text-muted)] block mb-1">Features</span>
               <div className="flex gap-1 flex-wrap">
@@ -84,7 +84,7 @@ function ModelDetailModal({
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
 
           <div className="text-[var(--color-text-muted)] text-xs mt-4">
             Created: {new Date(model.created_at).toLocaleString()}
@@ -255,15 +255,15 @@ export default function ModelsPage() {
               </div>
 
               <div className="flex flex-wrap gap-1 mb-3 text-xs">
-                {model.quantization && (
+                {model.quantization ? (
                   <span className="px-2 py-0.5 rounded bg-[var(--color-border)]">{model.quantization}</span>
-                )}
-                {params.param_count && (
+                ) : null}
+                {params.param_count ? (
                   <span className="px-2 py-0.5 rounded bg-[var(--color-border)]">{String(params.param_count)}</span>
-                )}
-                {params.context_window && (
+                ) : null}
+                {params.context_window ? (
                   <span className="px-2 py-0.5 rounded bg-[var(--color-border)]">{String(params.context_window)} ctx</span>
-                )}
+                ) : null}
               </div>
 
               <div className="flex gap-2 text-xs">

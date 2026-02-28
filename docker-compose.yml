@@ -21,7 +21,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-sovereign}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_EXTERNAL_PORT:-5436}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./gateway/alembic/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -39,8 +39,8 @@ services:
     image: qdrant/qdrant:v1.13.2
     container_name: sov-qdrant
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "${QDRANT_EXTERNAL_PORT:-6335}:6333"
+      - "6336:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
@@ -57,7 +57,7 @@ services:
     image: redis:7-alpine
     container_name: sov-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_EXTERNAL_PORT:-6380}:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
