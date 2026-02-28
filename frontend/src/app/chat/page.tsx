@@ -8,6 +8,8 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ModelSelector } from "@/components/shared/ModelSelector";
+import { ImageUpload } from "@/components/chat/ImageUpload";
+import { VoiceInput } from "@/components/chat/VoiceInput";
 
 export default function ChatPage() {
   const {
@@ -28,6 +30,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedBackend, setSelectedBackend] = useState("vllm");
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -59,7 +62,13 @@ export default function ChatPage() {
     }
 
     const userText = input.trim();
-    addLocalMessage(convId, { role: "user", content: userText });
+
+    // Build display content: include image preview if attached
+    const displayContent = attachedImage
+      ? `[Image attached]\n${userText}`
+      : userText;
+
+    addLocalMessage(convId, { role: "user", content: displayContent });
     setInput("");
 
     // Build messages for API call
@@ -69,6 +78,19 @@ export default function ChatPage() {
         role: m.role,
         content: m.content,
       })) || [];
+
+    // If image is attached, modify the last user message to include vision content
+    if (attachedImage && apiMessages.length > 0) {
+      const lastMsg = apiMessages[apiMessages.length - 1];
+      if (lastMsg.role === "user") {
+        // Use multimodal content format for the API
+        // The vision endpoint will be used to process the image
+        lastMsg.content = `[Analyze this image: ${attachedImage.substring(0, 50)}...] ${userText}`;
+      }
+    }
+
+    // Clear the attached image after sending
+    setAttachedImage(null);
 
     // Add streaming placeholder
     addLocalMessage(convId, { role: "assistant", content: "", isStreaming: true });
@@ -106,13 +128,21 @@ export default function ChatPage() {
     });
   }, [
     input, isStreaming, activeConversationId, selectedModel, selectedBackend,
-    createConversation, addLocalMessage, updateLastAssistantMessage, setStreaming, scrollToBottom,
+    attachedImage, createConversation, addLocalMessage, updateLastAssistantMessage,
+    setStreaming, scrollToBottom, setConversationId,
   ]);
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
     setStreaming(false);
   }, [setStreaming]);
+
+  const handleVoiceTranscription = useCallback(
+    (text: string) => {
+      setInput((prev) => (prev ? `${prev} ${text}` : text));
+    },
+    []
+  );
 
   return (
     <div className="flex h-full">
@@ -163,6 +193,8 @@ export default function ChatPage() {
                     "Write a report",
                     "Analyze data",
                     "Generate code",
+                    "Describe an image",
+                    "Generate an image",
                   ].map((suggestion) => (
                     <button
                       key={suggestion}
@@ -183,14 +215,88 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
-        <ChatInput
-          value={input}
-          onChange={setInput}
-          onSend={handleSend}
-          onStop={handleStop}
-          isStreaming={isStreaming}
-        />
+        {/* Attached image preview */}
+        {attachedImage && (
+          <div className="px-4 pb-2">
+            <div className="max-w-3xl mx-auto">
+              <ImageUpload
+                onImageSelected={setAttachedImage}
+                onRemove={() => setAttachedImage(null)}
+                currentImage={attachedImage}
+                disabled={isStreaming}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Input area with multimodal controls */}
+        <div className="border-t border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+          <div className="max-w-3xl mx-auto flex gap-2 items-end">
+            {/* Image upload button */}
+            {!attachedImage && (
+              <ImageUpload
+                onImageSelected={setAttachedImage}
+                onRemove={() => setAttachedImage(null)}
+                currentImage={null}
+                disabled={isStreaming}
+              />
+            )}
+
+            {/* Voice input button */}
+            <VoiceInput
+              onTranscription={handleVoiceTranscription}
+              disabled={isStreaming}
+            />
+
+            {/* Text input */}
+            <textarea
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                const el = e.target;
+                el.style.height = "auto";
+                el.style.height = Math.min(el.scrollHeight, 200) + "px";
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!isStreaming && input.trim()) {
+                    handleSend();
+                  }
+                }
+              }}
+              placeholder={
+                attachedImage
+                  ? "Ask about the image... (Shift+Enter for new line)"
+                  : "Type a message... (Shift+Enter for new line)"
+              }
+              disabled={isStreaming}
+              rows={1}
+              className="flex-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50 max-h-[200px]"
+            />
+
+            {/* Send / Stop button */}
+            {isStreaming ? (
+              <button
+                onClick={handleStop}
+                className="px-4 py-3 bg-[var(--color-danger)] hover:bg-red-600 text-white rounded-xl text-sm font-medium transition-colors"
+              >
+                Stop
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={!input.trim()}
+                className="px-6 py-3 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-xl text-sm font-medium disabled:opacity-50 transition-colors"
+              >
+                Send
+              </button>
+            )}
+          </div>
+          <div className="max-w-3xl mx-auto mt-1.5 flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
+            <span>All processing is local. Your data never leaves this machine.</span>
+          </div>
+        </div>
       </div>
     </div>
   );

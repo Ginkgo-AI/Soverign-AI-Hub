@@ -41,6 +41,7 @@ function Sidebar() {
       </div>
       <nav className="flex-1 p-2 space-y-0.5">
         <NavItem href="/chat" label="Chat" />
+        <NavItem href="/code" label="Code" />
         <NavItem href="/collections" label="Knowledge Base" />
         <NavItem href="/agents" label="Agents" />
         <NavItem href="/workflows" label="Workflows" />

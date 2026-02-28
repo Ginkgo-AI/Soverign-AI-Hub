@@ -345,6 +345,247 @@ CALCULATOR_SPEC = ToolSpec(
 
 
 # ---------------------------------------------------------------------------
+# Multimodal tool specifications
+# ---------------------------------------------------------------------------
+
+VISION_ANALYZE_SPEC = ToolSpec(
+    name="vision_analyze",
+    description="Analyze an image using a vision-language model. Provide a base64-encoded image and a text prompt.",
+    category="multimodal",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "image": {
+                "type": "string",
+                "description": "Base64-encoded image or data URI",
+            },
+            "prompt": {
+                "type": "string",
+                "description": "Text prompt / question about the image",
+                "default": "Describe this image in detail.",
+            },
+            "model": {
+                "type": "string",
+                "description": "Vision model to use (empty for default)",
+                "default": "",
+            },
+        },
+        "required": ["image"],
+    },
+    requires_approval=False,
+)
+
+TRANSCRIBE_AUDIO_SPEC = ToolSpec(
+    name="transcribe_audio",
+    description="Transcribe an audio file to text using Whisper. Provide base64-encoded audio data.",
+    category="multimodal",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "audio_base64": {
+                "type": "string",
+                "description": "Base64-encoded audio data",
+            },
+            "filename": {
+                "type": "string",
+                "description": "Original filename with extension (e.g. 'recording.wav')",
+                "default": "audio.wav",
+            },
+            "language": {
+                "type": "string",
+                "description": "ISO language code (e.g. 'en'). Omit for auto-detection.",
+            },
+        },
+        "required": ["audio_base64"],
+    },
+    requires_approval=False,
+)
+
+TEXT_TO_SPEECH_SPEC = ToolSpec(
+    name="text_to_speech",
+    description="Convert text to speech audio using Piper TTS. Returns base64-encoded audio.",
+    category="multimodal",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "text": {
+                "type": "string",
+                "description": "Text to synthesize into speech",
+            },
+            "voice": {
+                "type": "string",
+                "description": "Voice name (default, alloy, echo, fable, onyx, nova, shimmer)",
+                "default": "default",
+            },
+            "speed": {
+                "type": "number",
+                "description": "Speech rate multiplier (0.25 to 4.0)",
+                "default": 1.0,
+            },
+        },
+        "required": ["text"],
+    },
+    requires_approval=False,
+)
+
+GENERATE_IMAGE_SPEC = ToolSpec(
+    name="generate_image",
+    description="Generate an image from a text description using Stable Diffusion.",
+    category="multimodal",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "prompt": {
+                "type": "string",
+                "description": "Text description of the image to generate",
+            },
+            "negative_prompt": {
+                "type": "string",
+                "description": "Things to avoid in the generated image",
+                "default": "",
+            },
+            "size": {
+                "type": "string",
+                "description": "Image dimensions (e.g. '512x512', '768x768')",
+                "default": "512x512",
+            },
+            "steps": {
+                "type": "integer",
+                "description": "Number of diffusion steps (1-150)",
+                "default": 30,
+            },
+        },
+        "required": ["prompt"],
+    },
+    requires_approval=False,
+)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: Code Assistant tool specifications
+# ---------------------------------------------------------------------------
+
+CODE_ANALYZE_SPEC = ToolSpec(
+    name="code_analyze",
+    description="Perform static analysis on code to find bugs, security issues, and style problems.",
+    category="code_execution",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "code": {
+                "type": "string",
+                "description": "Source code to analyze",
+            },
+            "language": {
+                "type": "string",
+                "description": "Programming language (python, javascript, etc.)",
+                "default": "python",
+            },
+            "analysis_type": {
+                "type": "string",
+                "description": "Type of analysis: full, security, bugs, style",
+                "default": "full",
+            },
+        },
+        "required": ["code"],
+    },
+    requires_approval=False,
+)
+
+CODE_EXPLAIN_SPEC = ToolSpec(
+    name="code_explain",
+    description="Explain what a piece of code does using the LLM.",
+    category="code_execution",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "code": {
+                "type": "string",
+                "description": "Source code to explain",
+            },
+            "language": {
+                "type": "string",
+                "description": "Programming language",
+                "default": "python",
+            },
+            "detail_level": {
+                "type": "string",
+                "description": "Level of detail: brief, normal, detailed",
+                "default": "normal",
+            },
+        },
+        "required": ["code"],
+    },
+    requires_approval=False,
+)
+
+CODE_GENERATE_SPEC = ToolSpec(
+    name="code_generate",
+    description="Generate code from a natural language description using the LLM.",
+    category="code_execution",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "prompt": {
+                "type": "string",
+                "description": "Description of the code to generate",
+            },
+            "language": {
+                "type": "string",
+                "description": "Target programming language",
+                "default": "python",
+            },
+            "context": {
+                "type": "string",
+                "description": "Optional existing code for context",
+            },
+        },
+        "required": ["prompt"],
+    },
+    requires_approval=False,
+)
+
+GIT_DIFF_SPEC = ToolSpec(
+    name="git_diff",
+    description="Summarize a git diff, describing what changed and why.",
+    category="code_execution",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "diff": {
+                "type": "string",
+                "description": "Unified diff content",
+            },
+        },
+        "required": ["diff"],
+    },
+    requires_approval=False,
+)
+
+GIT_COMMIT_MESSAGE_SPEC = ToolSpec(
+    name="git_commit_message",
+    description="Generate a conventional commit message from a git diff.",
+    category="code_execution",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "diff": {
+                "type": "string",
+                "description": "Unified diff content",
+            },
+            "style": {
+                "type": "string",
+                "description": "Commit message style: conventional, descriptive, brief",
+                "default": "conventional",
+            },
+        },
+        "required": ["diff"],
+    },
+    requires_approval=False,
+)
+
+
+# ---------------------------------------------------------------------------
 # Convenience list of all built-in specs (handler wiring happens in
 # tool_executor.py which imports this list).
 # ---------------------------------------------------------------------------
@@ -358,4 +599,13 @@ BUILTIN_TOOL_SPECS: list[ToolSpec] = [
     HTTP_REQUEST_SPEC,
     SQL_QUERY_SPEC,
     CALCULATOR_SPEC,
+    VISION_ANALYZE_SPEC,
+    TRANSCRIBE_AUDIO_SPEC,
+    TEXT_TO_SPEECH_SPEC,
+    GENERATE_IMAGE_SPEC,
+    CODE_ANALYZE_SPEC,
+    CODE_EXPLAIN_SPEC,
+    CODE_GENERATE_SPEC,
+    GIT_DIFF_SPEC,
+    GIT_COMMIT_MESSAGE_SPEC,
 ]

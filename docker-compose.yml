@@ -152,6 +152,12 @@ services:
       VLLM_PORT: ${VLLM_PORT:-8000}
       LLAMA_CPP_HOST: ${LLAMA_CPP_HOST:-llama-cpp}
       LLAMA_CPP_PORT: ${LLAMA_CPP_PORT:-8080}
+      WHISPER_HOST: ${WHISPER_HOST:-whisper}
+      WHISPER_PORT: ${WHISPER_PORT:-9000}
+      PIPER_HOST: ${PIPER_HOST:-piper}
+      PIPER_PORT: ${PIPER_PORT:-9001}
+      COMFYUI_HOST: ${COMFYUI_HOST:-comfyui}
+      COMFYUI_PORT: ${COMFYUI_PORT:-8188}
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_PORT: 8888
       GATEWAY_SECRET_KEY: ${GATEWAY_SECRET_KEY:-dev-secret-change-in-production}
@@ -215,6 +221,73 @@ services:
       - ./models:/models:ro
       - file_storage:/data/files
 
+  # ---------------------------------------------------------------------------
+  # Whisper — Speech-to-text (whisper.cpp server)
+  # ---------------------------------------------------------------------------
+  whisper:
+    <<: *common
+    image: ghcr.io/ggerganov/whisper.cpp:main
+    container_name: sov-whisper
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./models/whisper:/models:ro
+    command: >
+      --server
+      --host 0.0.0.0
+      --port 9000
+      --model /models/${WHISPER_MODEL:-ggml-base.en.bin}
+      --threads ${WHISPER_THREADS:-4}
+    profiles:
+      - multimodal
+
+  # ---------------------------------------------------------------------------
+  # Piper — Text-to-speech server
+  # ---------------------------------------------------------------------------
+  piper:
+    <<: *common
+    image: rhasspy/wyoming-piper:latest
+    container_name: sov-piper
+    ports:
+      - "9001:9001"
+    volumes:
+      - ./models/piper:/models:ro
+      - piper_cache:/home/piper/.local
+    environment:
+      PIPER_VOICE: ${PIPER_VOICE:-en_US-lessac-medium}
+      PIPER_PORT: 9001
+    command: >
+      --voice ${PIPER_VOICE:-en_US-lessac-medium}
+      --data-dir /models
+      --download-dir /home/piper/.local/share/piper
+    profiles:
+      - multimodal
+
+  # ---------------------------------------------------------------------------
+  # ComfyUI — Stable Diffusion image generation (GPU)
+  # ---------------------------------------------------------------------------
+  comfyui:
+    <<: *common
+    image: ghcr.io/ai-dock/comfyui:latest
+    container_name: sov-comfyui
+    ports:
+      - "8188:8188"
+    volumes:
+      - ./models/stable-diffusion:/models:ro
+      - comfyui_output:/output
+    environment:
+      CLI_ARGS: "--listen 0.0.0.0 --port 8188"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles:
+      - multimodal
+      - gpu
+
 volumes:
   pgdata:
     driver: local
@@ -225,4 +298,8 @@ volumes:
   vllm_cache:
     driver: local
   file_storage:
+    driver: local
+  piper_cache:
+    driver: local
+  comfyui_output:
     driver: local

@@ -8,16 +8,20 @@ from app.middleware.audit import AuditMiddleware
 from app.routers import (
     admin,
     agents,
+    audio,
     auth,
     chat,
+    code,
     collections,
     conversations,
     documents,
     embeddings,
     health,
+    images,
     models,
     search,
     system_prompts,
+    vision,
 )
 
 
@@ -38,9 +42,15 @@ async def lifespan(app: FastAPI):
     # Shutdown
     from app.services.llm import llm_backend
     from app.services.vector_store import vector_store
+    from app.services.whisper import whisper_client
+    from app.services.tts import tts_client
+    from app.services.image_gen import image_gen_client
 
     await llm_backend.close()
     await vector_store.close()
+    await whisper_client.close()
+    await tts_client.close()
+    await image_gen_client.close()
     await engine.dispose()
 
 
@@ -81,3 +91,12 @@ app.include_router(documents.router, prefix="/api", tags=["Documents"])
 app.include_router(search.router, prefix="/api", tags=["Search"])
 app.include_router(agents.router, prefix="/api", tags=["Agents"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+
+# Multimodal endpoints (Phase 4)
+app.include_router(vision.router, prefix="/v1", tags=["Vision"])
+app.include_router(audio.router, prefix="/v1", tags=["Audio"])
+app.include_router(images.generation_router, prefix="/v1", tags=["Images"])
+app.include_router(images.gallery_router, prefix="/api", tags=["Images"])
+
+# Code Assistant endpoints (Phase 5)
+app.include_router(code.router, prefix="/api", tags=["Code"])

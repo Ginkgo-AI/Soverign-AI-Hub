@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     default_chunk_size: int = 512
     default_chunk_overlap: int = 50
 
+    # Whisper (speech-to-text)
+    whisper_host: str = "whisper"
+    whisper_port: int = 9000
+
+    # Piper (text-to-speech)
+    piper_host: str = "piper"
+    piper_port: int = 9001
+
+    # ComfyUI (image generation)
+    comfyui_host: str = "comfyui"
+    comfyui_port: int = 8188
+
     # Modes
     airgap_mode: bool = False
 
@@ -64,6 +76,18 @@ class Settings(BaseSettings):
     @property
     def llama_cpp_base_url(self) -> str:
         return f"http://{self.llama_cpp_host}:{self.llama_cpp_port}/v1"
+
+    @property
+    def whisper_base_url(self) -> str:
+        return f"http://{self.whisper_host}:{self.whisper_port}"
+
+    @property
+    def piper_base_url(self) -> str:
+        return f"http://{self.piper_host}:{self.piper_port}"
+
+    @property
+    def comfyui_base_url(self) -> str:
+        return f"http://{self.comfyui_host}:{self.comfyui_port}"
 
     @property
     def cors_origins(self) -> list[str]:

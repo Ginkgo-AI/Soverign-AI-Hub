@@ -2,6 +2,7 @@
 
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ThinkingBlock } from "./ThinkingBlock";
+import { AudioPlayer } from "./AudioPlayer";
 import type { Message } from "@/stores/chatStore";
 
 interface MessageBubbleProps {
@@ -21,6 +22,37 @@ function parseThinking(content: string): { thinking: string | null; response: st
     return { thinking, response };
   }
   return { thinking: null, response: content };
+}
+
+/**
+ * Detect and extract inline images from message content.
+ * Matches data URIs and /api/images/ URLs.
+ */
+function extractImages(content: string): { images: string[]; textContent: string } {
+  const images: string[] = [];
+  let textContent = content;
+
+  // Match data URIs
+  const dataUriRegex = /data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/g;
+  const dataMatches = content.match(dataUriRegex);
+  if (dataMatches) {
+    images.push(...dataMatches);
+    textContent = textContent.replace(dataUriRegex, "").trim();
+  }
+
+  // Match /api/images/ URLs
+  const imageUrlRegex = /\/api\/images\/[a-f0-9]+/g;
+  const urlMatches = content.match(imageUrlRegex);
+  if (urlMatches) {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
+    images.push(...urlMatches.map((url) => `${apiUrl}${url}`));
+    textContent = textContent.replace(imageUrlRegex, "").trim();
+  }
+
+  // Clean up "[Image attached]" markers
+  textContent = textContent.replace(/\[Image attached\]\s*/g, "").trim();
+
+  return { images, textContent };
 }
 
 export function MessageBubble({ message }: MessageBubbleProps) {
@@ -51,22 +83,58 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     );
   }
 
+  // Extract images from content
+  const { images, textContent } = extractImages(message.content || "");
+
   if (isUser) {
     return (
       <div className="max-w-3xl mx-auto flex justify-end">
-        <div className="inline-block px-4 py-3 rounded-2xl rounded-br-sm text-sm bg-[var(--color-accent)] text-white max-w-[80%]">
-          {message.content}
+        <div className="inline-block max-w-[80%]">
+          {/* Inline image previews */}
+          {images.length > 0 && (
+            <div className="flex gap-2 mb-2 justify-end">
+              {images.map((src, i) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt={`Attached image ${i + 1}`}
+                  className="h-24 w-24 rounded-lg object-cover border border-white/20"
+                />
+              ))}
+            </div>
+          )}
+          {textContent && (
+            <div className="px-4 py-3 rounded-2xl rounded-br-sm text-sm bg-[var(--color-accent)] text-white">
+              {textContent}
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   // Assistant message
-  const { thinking, response } = parseThinking(message.content || "");
+  const { thinking, response } = parseThinking(textContent || "");
 
   return (
     <div className="max-w-3xl mx-auto">
       {thinking && <ThinkingBlock content={thinking} />}
+
+      {/* Inline images in assistant response */}
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {images.map((src, i) => (
+            <a key={i} href={src} target="_blank" rel="noopener noreferrer">
+              <img
+                src={src}
+                alt={`Generated image ${i + 1}`}
+                className="max-h-64 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-accent)] transition-colors"
+              />
+            </a>
+          ))}
+        </div>
+      )}
+
       <div className="text-sm leading-relaxed">
         {response ? (
           <MarkdownRenderer content={response} />
@@ -74,6 +142,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           <span className="inline-block w-2 h-4 bg-[var(--color-text-muted)] animate-pulse" />
         ) : null}
       </div>
+
+      {/* Read aloud button for non-streaming assistant messages */}
+      {!message.isStreaming && response && response.length > 10 && (
+        <div className="mt-2">
+          <AudioPlayer text={response} />
+        </div>
+      )}
     </div>
   );
 }

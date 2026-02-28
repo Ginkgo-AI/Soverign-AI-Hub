@@ -381,6 +381,197 @@ async def _handle_calculator(expression: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Multimodal tool handler implementations
+# ---------------------------------------------------------------------------
+
+async def _handle_vision_analyze(
+    image: str,
+    prompt: str = "Describe this image in detail.",
+    model: str = "",
+) -> dict[str, Any]:
+    """Analyze an image using a vision-language model."""
+    from app.services.vision import analyze_image
+
+    try:
+        result = await analyze_image(
+            images=[image],
+            prompt=prompt,
+            model=model,
+            stream=False,
+        )
+        content = ""
+        if isinstance(result, dict):
+            choices = result.get("choices", [])
+            if choices:
+                content = choices[0].get("message", {}).get("content", "")
+        return _make_result(success=True, output=content)
+    except Exception as exc:
+        return _make_result(success=False, error=f"Vision analysis failed: {exc}")
+
+
+async def _handle_transcribe_audio(
+    audio_base64: str,
+    filename: str = "audio.wav",
+    language: str | None = None,
+) -> dict[str, Any]:
+    """Transcribe audio to text using Whisper."""
+    import base64
+    from app.services.whisper import whisper_client
+
+    try:
+        audio_data = base64.b64decode(audio_base64)
+        result = await whisper_client.transcribe(
+            audio_data=audio_data,
+            filename=filename,
+            language=language,
+        )
+        return _make_result(success=True, output=result.get("text", ""))
+    except Exception as exc:
+        return _make_result(success=False, error=f"Transcription failed: {exc}")
+
+
+async def _handle_text_to_speech(
+    text: str,
+    voice: str = "default",
+    speed: float = 1.0,
+) -> dict[str, Any]:
+    """Convert text to speech using Piper TTS."""
+    import base64
+    from app.services.tts import tts_client
+
+    try:
+        audio_data = await tts_client.synthesize(
+            text=text,
+            voice=voice,
+            speed=speed,
+        )
+        audio_b64 = base64.b64encode(audio_data).decode("ascii")
+        return _make_result(
+            success=True,
+            output={
+                "audio_base64": audio_b64,
+                "format": "wav",
+                "text_length": len(text),
+            },
+        )
+    except Exception as exc:
+        return _make_result(success=False, error=f"TTS failed: {exc}")
+
+
+async def _handle_generate_image(
+    prompt: str,
+    negative_prompt: str = "",
+    size: str = "512x512",
+    steps: int = 30,
+) -> dict[str, Any]:
+    """Generate an image from a text prompt."""
+    from app.services.image_gen import image_gen_client, _parse_size
+
+    try:
+        width, height = _parse_size(size)
+        images = await image_gen_client.generate(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            steps=steps,
+        )
+        # Return URLs/metadata for the generated images
+        output = [
+            {"id": img["id"], "url": img["url"], "prompt": prompt}
+            for img in images
+        ]
+        return _make_result(success=True, output=output)
+    except Exception as exc:
+        return _make_result(success=False, error=f"Image generation failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: Code Assistant tool handler implementations
+# ---------------------------------------------------------------------------
+
+async def _handle_code_analyze(
+    code: str,
+    language: str = "python",
+    analysis_type: str = "full",
+) -> dict[str, Any]:
+    """Perform static analysis on code."""
+    from app.services.code_analysis import analyze_code
+
+    try:
+        result = analyze_code(code=code, language=language, analysis_type=analysis_type)
+        return _make_result(
+            success=True,
+            output={
+                "issues": [i.model_dump() for i in result.issues],
+                "summary": result.summary,
+                "issue_count": result.issue_count,
+            },
+        )
+    except Exception as exc:
+        return _make_result(success=False, error=f"Code analysis failed: {exc}")
+
+
+async def _handle_code_explain(
+    code: str,
+    language: str = "python",
+    detail_level: str = "normal",
+) -> dict[str, Any]:
+    """Explain code using LLM."""
+    from app.services.code_analysis import explain_code_with_llm
+
+    try:
+        explanation = await explain_code_with_llm(
+            code=code, language=language, detail_level=detail_level,
+        )
+        return _make_result(success=True, output=explanation)
+    except Exception as exc:
+        return _make_result(success=False, error=f"Code explanation failed: {exc}")
+
+
+async def _handle_code_generate(
+    prompt: str,
+    language: str = "python",
+    context: str | None = None,
+) -> dict[str, Any]:
+    """Generate code from a description."""
+    from app.services.code_analysis import generate_code_with_llm
+
+    try:
+        result = await generate_code_with_llm(
+            prompt=prompt, language=language, context=context,
+        )
+        return _make_result(success=True, output=result)
+    except Exception as exc:
+        return _make_result(success=False, error=f"Code generation failed: {exc}")
+
+
+async def _handle_git_diff(diff: str) -> dict[str, Any]:
+    """Summarize a git diff."""
+    from app.services.code_analysis import summarize_diff
+
+    try:
+        result = await summarize_diff(diff)
+        return _make_result(success=True, output=result)
+    except Exception as exc:
+        return _make_result(success=False, error=f"Diff summary failed: {exc}")
+
+
+async def _handle_git_commit_message(
+    diff: str,
+    style: str = "conventional",
+) -> dict[str, Any]:
+    """Generate a commit message from a diff."""
+    from app.services.code_analysis import generate_commit_message
+
+    try:
+        result = await generate_commit_message(diff, style)
+        return _make_result(success=True, output=result)
+    except Exception as exc:
+        return _make_result(success=False, error=f"Commit message generation failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
 # Map spec names to handler functions
 # ---------------------------------------------------------------------------
 
@@ -393,6 +584,15 @@ _HANDLER_MAP: dict[str, Any] = {
     "http_request": _handle_http_request,
     "sql_query": _handle_sql_query,
     "calculator": _handle_calculator,
+    "vision_analyze": _handle_vision_analyze,
+    "transcribe_audio": _handle_transcribe_audio,
+    "text_to_speech": _handle_text_to_speech,
+    "generate_image": _handle_generate_image,
+    "code_analyze": _handle_code_analyze,
+    "code_explain": _handle_code_explain,
+    "code_generate": _handle_code_generate,
+    "git_diff": _handle_git_diff,
+    "git_commit_message": _handle_git_commit_message,
 }
 
 
