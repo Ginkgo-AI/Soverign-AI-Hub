@@ -7,7 +7,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { ModelSelector } from "@/components/shared/ModelSelector";
+import { ModelSettings } from "@/components/chat/ModelSettings";
 import { ImageUpload } from "@/components/chat/ImageUpload";
 import { VoiceInput } from "@/components/chat/VoiceInput";
 
@@ -30,6 +30,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedBackend, setSelectedBackend] = useState("vllm");
+  const [contextLength, setContextLength] = useState(8192);
+  const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -125,9 +127,10 @@ export default function ChatPage() {
       model: selectedModel,
       backend: selectedBackend,
       conversationId: activeConversationId || undefined,
+      maxContextTokens: contextLength,
     });
   }, [
-    input, isStreaming, activeConversationId, selectedModel, selectedBackend,
+    input, isStreaming, activeConversationId, selectedModel, selectedBackend, contextLength,
     attachedImage, createConversation, addLocalMessage, updateLastAssistantMessage,
     setStreaming, scrollToBottom, setConversationId,
   ]);
@@ -163,14 +166,15 @@ export default function ChatPage() {
               </span>
             )}
           </div>
-          <ModelSelector
-            selectedModel={selectedModel}
-            selectedBackend={selectedBackend}
-            onModelChange={(model, backend) => {
-              setSelectedModel(model);
-              setSelectedBackend(backend);
-            }}
-          />
+          <button
+            onClick={() => setModelSettingsOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] transition-colors text-xs"
+          >
+            <span className="w-2 h-2 rounded-full bg-green-400" />
+            <span className="truncate max-w-[160px]">
+              {selectedModel || "Auto model"}
+            </span>
+          </button>
         </div>
 
         {/* Messages */}
@@ -298,6 +302,20 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+
+      {/* Model Settings panel */}
+      <ModelSettings
+        open={modelSettingsOpen}
+        onClose={() => setModelSettingsOpen(false)}
+        selectedModel={selectedModel}
+        selectedBackend={selectedBackend}
+        onModelChange={(model, backend) => {
+          setSelectedModel(model);
+          setSelectedBackend(backend);
+        }}
+        contextLength={contextLength}
+        onContextLengthChange={setContextLength}
+      />
     </div>
   );
 }

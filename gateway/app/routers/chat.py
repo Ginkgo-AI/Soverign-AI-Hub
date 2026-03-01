@@ -51,6 +51,12 @@ class ChatCompletionRequest(BaseModel):
     tools: list[Tool] | None = None
     tool_choice: str | None = None
 
+    # Inference parameters
+    top_p: float | None = None
+    frequency_penalty: float | None = None
+    presence_penalty: float | None = None
+    repeat_penalty: float | None = None
+
     # Extensions
     backend: str = "vllm"
     conversation_id: str | None = None
@@ -111,6 +117,14 @@ async def chat_completions(
     kwargs: dict[str, Any] = {}
     if request.tool_choice:
         kwargs["tool_choice"] = request.tool_choice
+    if request.top_p is not None:
+        kwargs["top_p"] = request.top_p
+    if request.frequency_penalty is not None:
+        kwargs["frequency_penalty"] = request.frequency_penalty
+    if request.presence_penalty is not None:
+        kwargs["presence_penalty"] = request.presence_penalty
+    if request.repeat_penalty is not None:
+        kwargs["repeat_penalty"] = request.repeat_penalty
 
     if request.stream:
         stream = await llm_backend.chat_completion(

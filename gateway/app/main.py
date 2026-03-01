@@ -19,6 +19,7 @@ from app.routers import (
     embeddings,
     health,
     images,
+    model_management,
     models,
     search,
     system_prompts,
@@ -120,3 +121,6 @@ app.include_router(training.router, prefix="/api", tags=["Training"])
 
 # Edge Device Management endpoints (Phase 8)
 app.include_router(edge.router, prefix="/api", tags=["Edge Devices"])
+
+# Model Management controls (LM Studio-style)
+app.include_router(model_management.router, prefix="/api", tags=["Model Management"])

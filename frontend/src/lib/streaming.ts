@@ -19,6 +19,10 @@ export interface StreamOptions {
   backend?: string;
   temperature?: number;
   maxTokens?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  repeatPenalty?: number;
   tools?: unknown[];
   conversationId?: string;
   systemPrompt?: string;
@@ -52,6 +56,10 @@ export async function streamChat(
         backend: options.backend || "vllm",
         temperature: options.temperature ?? 0.7,
         max_tokens: options.maxTokens ?? 4096,
+        top_p: options.topP,
+        frequency_penalty: options.frequencyPenalty,
+        presence_penalty: options.presencePenalty,
+        repeat_penalty: options.repeatPenalty,
         tools: options.tools,
         conversation_id: options.conversationId,
         system_prompt: options.systemPrompt,
