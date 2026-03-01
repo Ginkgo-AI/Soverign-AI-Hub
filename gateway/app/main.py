@@ -54,6 +54,9 @@ async def lifespan(app: FastAPI):
 
     await _flush_buffer()
 
+    from app.services.model_manager import model_manager
+
+    await model_manager.close()
     await llm_backend.close()
     await vector_store.close()
     await whisper_client.close()

@@ -1,11 +1,15 @@
 """Model management endpoints: discovery, load/unload, config, system resources."""
 
+import logging
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.middleware.auth import get_optional_user
 from app.services.model_manager import model_manager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/model-management")
 
@@ -28,7 +32,7 @@ class ModelConfigRequest(BaseModel):
     keep_alive: str | None = None
 
 
-# In-memory active config (per-session; a real deployment would persist this)
+# In-memory config shared across all requests in this process. Resets on server restart.
 _active_config: dict[str, Any] = {
     "model": "",
     "backend": "vllm",
@@ -38,69 +42,89 @@ _active_config: dict[str, Any] = {
 
 
 @router.get("/available")
-async def list_available_models():
+async def list_available_models(user=Depends(get_optional_user)):
     """List all models from both backends with metadata."""
-    models = await model_manager.list_available_models()
+    try:
+        models = await model_manager.list_available_models()
+    except Exception as e:
+        logger.exception("Failed to list available models")
+        raise HTTPException(status_code=502, detail=f"Failed to query model backends: {e}")
     return {"models": models, "count": len(models)}
 
 
 @router.get("/loaded")
-async def list_loaded_models():
+async def list_loaded_models(user=Depends(get_optional_user)):
     """List currently loaded models."""
-    models = await model_manager.list_loaded_models()
+    try:
+        models = await model_manager.list_loaded_models()
+    except Exception as e:
+        logger.exception("Failed to list loaded models")
+        raise HTTPException(status_code=502, detail=f"Failed to query model backends: {e}")
     return {"models": models, "count": len(models)}
 
 
 @router.post("/load")
-async def load_model(request: LoadModelRequest):
+async def load_model(request: LoadModelRequest, user=Depends(get_optional_user)):
     """Load a model into memory (llama.cpp only; vLLM models are server-managed)."""
-    result = await model_manager.load_model(
-        model=request.model,
-        backend=request.backend,
-        keep_alive=request.keep_alive,
-    )
+    try:
+        result = await model_manager.load_model(
+            model=request.model,
+            backend=request.backend,
+            keep_alive=request.keep_alive,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error loading model %s", request.model)
+        raise HTTPException(status_code=500, detail=f"Failed to load model: {e}")
     return result
 
 
 @router.post("/unload")
-async def unload_model(request: UnloadModelRequest):
+async def unload_model(request: UnloadModelRequest, user=Depends(get_optional_user)):
     """Unload a model from memory."""
-    result = await model_manager.unload_model(
-        model=request.model,
-        backend=request.backend,
-    )
+    try:
+        result = await model_manager.unload_model(
+            model=request.model,
+            backend=request.backend,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error unloading model %s", request.model)
+        raise HTTPException(status_code=500, detail=f"Failed to unload model: {e}")
     return result
 
 
 @router.patch("/config")
-async def update_config(request: ModelConfigRequest):
+async def update_config(request: ModelConfigRequest, user=Depends(get_optional_user)):
     """Update active model/context-length/keep-alive settings."""
-    if request.model is not None:
-        _active_config["model"] = request.model
-    if request.backend is not None:
-        _active_config["backend"] = request.backend
-    if request.context_length is not None:
-        _active_config["context_length"] = request.context_length
-    if request.keep_alive is not None:
-        _active_config["keep_alive"] = request.keep_alive
-
+    _active_config.update(request.model_dump(exclude_none=True))
     return {"status": "ok", "config": _active_config}
 
 
 @router.get("/config")
-async def get_config():
+async def get_config(user=Depends(get_optional_user)):
     """Get the current active model configuration."""
     return _active_config
 
 
 @router.get("/system-resources")
-async def system_resources():
+async def system_resources(user=Depends(get_optional_user)):
     """Get system resource information (RAM, CPU, GPU)."""
-    return model_manager.get_system_resources()
+    try:
+        return await model_manager.get_system_resources()
+    except Exception as e:
+        logger.exception("Failed to get system resources")
+        raise HTTPException(status_code=500, detail=f"Failed to get system resources: {e}")
 
 
 @router.get("/recommended")
-async def recommended_models():
+async def recommended_models(user=Depends(get_optional_user)):
     """Get model recommendations based on system resources."""
-    recommendations = await model_manager.recommend_models()
+    try:
+        recommendations = await model_manager.recommend_models()
+    except Exception as e:
+        logger.exception("Failed to generate model recommendations")
+        raise HTTPException(status_code=502, detail=f"Failed to generate recommendations: {e}")
     return {"models": recommendations, "count": len(recommendations)}

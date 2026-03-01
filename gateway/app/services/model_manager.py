@@ -1,6 +1,8 @@
 """Model management service: discovery, loading/unloading, system resources, recommendations."""
 
+import asyncio
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -92,8 +94,6 @@ def _parse_model_metadata(model_id: str) -> dict[str, str | None]:
                 break
 
     # Detect parameter count
-    import re
-
     match = re.search(r"(\d+\.?\d*)[bB]", model_id)
     if match:
         parameter_count = f"{match.group(1)}B"
@@ -167,18 +167,23 @@ class ModelManager:
             }
 
         # llama.cpp with Ollama-compatible endpoint: POST /api/generate with keep_alive
+        client = self._get_client(backend)
         try:
-            client = self._get_client(backend)
             response = await client.post(
                 "/api/generate",
                 json={"model": model, "keep_alive": keep_alive, "prompt": ""},
                 timeout=120.0,
             )
-            if response.status_code < 400:
-                return {"status": "ok", "message": f"Model {model} loaded with keep_alive={keep_alive}"}
-            return {"status": "error", "message": f"Backend returned {response.status_code}"}
-        except httpx.HTTPError as e:
-            return {"status": "error", "message": str(e)}
+        except httpx.ConnectError:
+            raise RuntimeError(f"Cannot connect to {backend} backend. Is it running?")
+        except httpx.TimeoutException:
+            raise RuntimeError(f"Timeout loading model {model} — it may be too large or the backend is unresponsive")
+
+        if response.status_code >= 400:
+            detail = response.text[:200] if response.text else f"status {response.status_code}"
+            raise RuntimeError(f"Backend rejected load request for {model}: {detail}")
+
+        return {"status": "ok", "message": f"Model {model} loaded with keep_alive={keep_alive}"}
 
     async def unload_model(self, model: str, backend: str = "llama-cpp") -> dict[str, Any]:
         """Unload a model from memory by setting keep_alive=0."""
@@ -188,20 +193,25 @@ class ModelManager:
                 "message": "vLLM models cannot be unloaded dynamically.",
             }
 
+        client = self._get_client(backend)
         try:
-            client = self._get_client(backend)
             response = await client.post(
                 "/api/generate",
                 json={"model": model, "keep_alive": "0", "prompt": ""},
                 timeout=30.0,
             )
-            if response.status_code < 400:
-                return {"status": "ok", "message": f"Model {model} unloaded"}
-            return {"status": "error", "message": f"Backend returned {response.status_code}"}
-        except httpx.HTTPError as e:
-            return {"status": "error", "message": str(e)}
+        except httpx.ConnectError:
+            raise RuntimeError(f"Cannot connect to {backend} backend. Is it running?")
+        except httpx.TimeoutException:
+            raise RuntimeError(f"Timeout unloading model {model}")
 
-    def get_system_resources(self) -> dict[str, Any]:
+        if response.status_code >= 400:
+            detail = response.text[:200] if response.text else f"status {response.status_code}"
+            raise RuntimeError(f"Backend rejected unload request for {model}: {detail}")
+
+        return {"status": "ok", "message": f"Model {model} unloaded"}
+
+    async def get_system_resources(self) -> dict[str, Any]:
         """Get current system resource usage."""
         mem = psutil.virtual_memory()
         resources = SystemResources(
@@ -209,34 +219,40 @@ class ModelManager:
             ram_used_gb=mem.used / (1024**3),
             ram_available_gb=mem.available / (1024**3),
             cpu_count=psutil.cpu_count(logical=True) or 0,
-            cpu_percent=psutil.cpu_percent(interval=0.1),
+            cpu_percent=psutil.cpu_percent(interval=None),
         )
 
-        # Try to detect NVIDIA GPU
+        # Detect NVIDIA GPU asynchronously to avoid blocking the event loop.
+        # Uses create_subprocess_exec with a fixed argument list (no shell injection risk).
         try:
-            import subprocess
-
-            result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=name,memory.total,memory.used", "--format=csv,noheader,nounits"],
-                capture_output=True,
-                text=True,
-                timeout=5,
+            proc = await asyncio.create_subprocess_exec(
+                "nvidia-smi",
+                "--query-gpu=name,memory.total,memory.used",
+                "--format=csv,noheader,nounits",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-            if result.returncode == 0 and result.stdout.strip():
-                parts = result.stdout.strip().split(",")
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            if proc.returncode == 0 and stdout:
+                output = stdout.decode().strip()
+                parts = output.split(",")
                 if len(parts) >= 3:
                     resources.gpu_detected = True
                     resources.gpu_name = parts[0].strip()
                     resources.gpu_memory_total_gb = float(parts[1].strip()) / 1024
                     resources.gpu_memory_used_gb = float(parts[2].strip()) / 1024
-        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
-            pass
+        except FileNotFoundError:
+            pass  # nvidia-smi not installed
+        except asyncio.TimeoutError:
+            logger.warning("nvidia-smi timed out; GPU detection skipped")
+        except ValueError as e:
+            logger.warning("Failed to parse nvidia-smi output: %s", e)
 
         return resources.to_dict()
 
     async def recommend_models(self) -> list[dict[str, Any]]:
         """Recommend models based on available system resources."""
-        resources = self.get_system_resources()
+        resources = await self.get_system_resources()
         available_ram = resources["ram_available_gb"]
         gpu_mem = resources.get("gpu_memory_total_gb")
 

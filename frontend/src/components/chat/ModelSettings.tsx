@@ -10,6 +10,8 @@ import {
   Loader2,
   ChevronDown,
   Zap,
+  AlertCircle,
+  Check,
 } from "lucide-react";
 
 interface ModelInfo {
@@ -94,9 +96,18 @@ export function ModelSettings({
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const showSuccess = (msg: string) => {
+    setSuccess(msg);
+    setError(null);
+    setTimeout(() => setSuccess(null), 3000);
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [modelsRes, resourcesRes, recsRes] = await Promise.allSettled([
         apiJson<{ models: ModelInfo[] }>("/api/model-management/available"),
@@ -107,6 +118,17 @@ export function ModelSettings({
       if (modelsRes.status === "fulfilled") setModels(modelsRes.value.models);
       if (resourcesRes.status === "fulfilled") setResources(resourcesRes.value);
       if (recsRes.status === "fulfilled") setRecommendations(recsRes.value.models);
+
+      const failures = [modelsRes, resourcesRes, recsRes].filter(
+        (r) => r.status === "rejected"
+      );
+      if (failures.length === 3) {
+        setError("Could not connect to model backends. Is the gateway running?");
+      } else if (failures.length > 0) {
+        console.warn("Some model management calls failed:", failures.map((f) => (f as PromiseRejectedResult).reason));
+      }
+    } catch (e) {
+      setError(`Unexpected error loading model settings: ${e instanceof Error ? e.message : e}`);
     } finally {
       setLoading(false);
     }
@@ -118,12 +140,16 @@ export function ModelSettings({
 
   const handleLoad = async (model: string, backend: string) => {
     setActionLoading(model);
+    setError(null);
     try {
       await apiJson("/api/model-management/load", {
         method: "POST",
         body: JSON.stringify({ model, backend, keep_alive: keepAlive }),
       });
+      showSuccess(`Model "${model}" loaded successfully`);
       await fetchData();
+    } catch (e) {
+      setError(`Failed to load "${model}": ${e instanceof Error ? e.message : "Unknown error"}`);
     } finally {
       setActionLoading(null);
     }
@@ -131,27 +157,37 @@ export function ModelSettings({
 
   const handleUnload = async (model: string, backend: string) => {
     setActionLoading(model);
+    setError(null);
     try {
       await apiJson("/api/model-management/unload", {
         method: "POST",
         body: JSON.stringify({ model, backend }),
       });
+      showSuccess(`Model "${model}" unloaded`);
       await fetchData();
+    } catch (e) {
+      setError(`Failed to unload "${model}": ${e instanceof Error ? e.message : "Unknown error"}`);
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleApplyConfig = async () => {
-    await apiJson("/api/model-management/config", {
-      method: "PATCH",
-      body: JSON.stringify({
-        model: selectedModel,
-        backend: selectedBackend,
-        context_length: contextLength,
-        keep_alive: keepAlive,
-      }),
-    });
+    setError(null);
+    try {
+      await apiJson("/api/model-management/config", {
+        method: "PATCH",
+        body: JSON.stringify({
+          model: selectedModel,
+          backend: selectedBackend,
+          context_length: contextLength,
+          keep_alive: keepAlive,
+        }),
+      });
+      showSuccess("Configuration applied");
+    } catch (e) {
+      setError(`Failed to apply configuration: ${e instanceof Error ? e.message : "Unknown error"}`);
+    }
   };
 
   if (!open) return null;
@@ -182,6 +218,25 @@ export function ModelSettings({
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+          {/* Error banner */}
+          {error && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+              <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="ml-auto flex-shrink-0">
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
+          {/* Success banner */}
+          {success && (
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-green-500/10 border border-green-500/20 text-xs text-green-400">
+              <Check size={14} className="flex-shrink-0" />
+              <span>{success}</span>
+            </div>
+          )}
+
           {loading && models.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="animate-spin text-[var(--color-text-muted)]" size={24} />
