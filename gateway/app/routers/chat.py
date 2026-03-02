@@ -1,6 +1,9 @@
 """OpenAI-compatible /v1/chat/completions endpoint with streaming and persistence."""
 
+import asyncio
 import json
+import logging
+import time
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
@@ -20,8 +23,24 @@ from app.services.conversation import (
     get_messages,
 )
 from app.services.llm import llm_backend
+from app.services.tool_executor import execute_tool
+from app.services.tool_registry import tool_registry
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# Default tools enabled when agent_mode is on and no explicit list is provided
+CHAT_DEFAULT_TOOLS = [
+    "calculator",
+    "rag_search",
+    "file_read",
+    "file_write",
+    "code_analyze",
+    "code_explain",
+    "code_generate",
+    "python_exec",
+    "bash_exec",
+]
 
 
 class ChatMessage(BaseModel):
@@ -62,6 +81,24 @@ class ChatCompletionRequest(BaseModel):
     conversation_id: str | None = None
     system_prompt: str | None = None
     max_context_tokens: int = 8192
+
+    # Agent mode extensions
+    agent_mode: bool = True
+    agent_tools: list[str] | None = None
+    max_iterations: int = 20
+    agent_timeout: float = 300.0
+
+
+def _sse(event: str, data: dict | str) -> bytes:
+    """Format a named SSE event."""
+    payload = data if isinstance(data, str) else json.dumps(data)
+    return f"event: {event}\ndata: {payload}\n\n".encode()
+
+
+def _sse_data(data: dict | str) -> bytes:
+    """Format a default (unnamed) SSE data line."""
+    payload = data if isinstance(data, str) else json.dumps(data)
+    return f"data: {payload}\n\n".encode()
 
 
 @router.post("/chat/completions")
@@ -126,6 +163,27 @@ async def chat_completions(
     if request.repeat_penalty is not None:
         kwargs["repeat_penalty"] = request.repeat_penalty
 
+    # Route to agent loop when agent_mode is enabled and streaming
+    if request.stream and request.agent_mode:
+        return StreamingResponse(
+            _streaming_agent_loop(
+                messages=api_messages,
+                model=request.model,
+                backend=request.backend,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                agent_tools=request.agent_tools,
+                max_iterations=request.max_iterations,
+                agent_timeout=request.agent_timeout,
+                db=db,
+                conv_id=conv_id,
+                user_id=str(user.id) if user else None,
+                extra_kwargs=kwargs,
+            ),
+            media_type="text/event-stream",
+            headers={"X-Conversation-ID": str(conv_id) if conv_id else ""},
+        )
+
     if request.stream:
         stream = await llm_backend.chat_completion(
             messages=api_messages,
@@ -174,6 +232,222 @@ async def chat_completions(
         result["_conversation_id"] = str(conv_id)
 
     return result
+
+
+async def _streaming_agent_loop(
+    *,
+    messages: list[dict[str, Any]],
+    model: str,
+    backend: str,
+    temperature: float,
+    max_tokens: int,
+    agent_tools: list[str] | None,
+    max_iterations: int,
+    agent_timeout: float,
+    db: AsyncSession,
+    conv_id: uuid.UUID | None,
+    user_id: str | None,
+    extra_kwargs: dict[str, Any],
+) -> AsyncIterator[bytes]:
+    """Server-side agent loop: LLM -> tool_calls -> execute -> feed back -> repeat."""
+
+    # Resolve which tools to offer the LLM
+    tool_names = agent_tools or CHAT_DEFAULT_TOOLS
+    openai_tools = tool_registry.get_openai_tools(tool_names)
+
+    # If no tools are actually registered/available, fall back to plain chat
+    if not openai_tools:
+        logger.warning("Agent mode requested but no tools available, falling back to plain chat")
+        stream = await llm_backend.chat_completion(
+            messages=messages,
+            model=model,
+            backend=backend,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+            **extra_kwargs,
+        )
+        async for chunk in _persist_stream(stream, db, conv_id):
+            yield chunk
+        return
+
+    available_tool_names = [t["function"]["name"] for t in openai_tools]
+
+    # Emit agent_start
+    yield _sse("agent_status", {
+        "type": "agent_start",
+        "iteration": 1,
+        "tools": available_tool_names,
+    })
+
+    loop_messages = list(messages)
+    deadline = time.monotonic() + agent_timeout
+
+    for iteration in range(1, max_iterations + 1):
+        if time.monotonic() > deadline:
+            yield _sse("agent_status", {
+                "type": "agent_error",
+                "error": "Agent timeout exceeded",
+                "iterations": iteration - 1,
+            })
+            yield _sse_data("[DONE]")
+            return
+
+        # Call LLM with tools (non-streaming to get complete tool_calls)
+        try:
+            result = await llm_backend.chat_completion(
+                messages=loop_messages,
+                model=model,
+                backend=backend,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                tools=openai_tools,
+                stream=False,
+                **extra_kwargs,
+            )
+        except Exception as e:
+            logger.exception("LLM call failed in agent loop")
+            yield _sse("agent_status", {
+                "type": "agent_error",
+                "error": f"LLM error: {str(e)}",
+                "iterations": iteration,
+            })
+            yield _sse_data("[DONE]")
+            return
+
+        choice = result.get("choices", [{}])[0]
+        message = choice.get("message", {})
+        tool_calls = message.get("tool_calls")
+
+        if not tool_calls:
+            # Final text response — stream it as standard SSE content tokens
+            content = message.get("content", "") or ""
+
+            # Persist assistant message
+            if conv_id:
+                await add_message(db, conv_id, role="assistant", content=content)
+
+            # Stream content as delta chunks for compatibility
+            if content:
+                # Send in reasonable chunks to feel like streaming
+                chunk_size = 20
+                for i in range(0, len(content), chunk_size):
+                    chunk_text = content[i : i + chunk_size]
+                    yield _sse_data({
+                        "choices": [{
+                            "delta": {"content": chunk_text},
+                            "index": 0,
+                        }]
+                    })
+                    await asyncio.sleep(0.01)
+
+            yield _sse("agent_status", {
+                "type": "agent_done",
+                "iterations": iteration,
+            })
+            yield _sse_data("[DONE]")
+            return
+
+        # We have tool_calls — execute them
+        # Append the assistant message (with tool_calls) to loop context
+        loop_messages.append({
+            "role": "assistant",
+            "content": message.get("content"),
+            "tool_calls": tool_calls,
+        })
+
+        # Persist assistant tool-call message
+        if conv_id:
+            await add_message(
+                db, conv_id,
+                role="assistant",
+                content=message.get("content"),
+                tool_calls=tool_calls,
+            )
+
+        for tc in tool_calls:
+            tc_id = tc.get("id", f"tc_{uuid.uuid4().hex[:8]}")
+            func = tc.get("function", {})
+            tool_name = func.get("name", "unknown")
+            raw_args = func.get("arguments", "{}")
+
+            # Parse arguments
+            try:
+                arguments = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+            except json.JSONDecodeError:
+                arguments = {"raw": raw_args}
+
+            # Emit tool_call event
+            yield _sse("tool_call", {
+                "id": tc_id,
+                "name": tool_name,
+                "arguments": arguments,
+            })
+
+            # Execute tool
+            start = time.monotonic()
+            try:
+                tool_result = await execute_tool(
+                    tool_name=tool_name,
+                    arguments=arguments,
+                    user_id=user_id,
+                )
+            except Exception as e:
+                logger.exception(f"Tool execution failed: {tool_name}")
+                tool_result = {
+                    "success": False,
+                    "output": None,
+                    "error": str(e),
+                    "duration_ms": (time.monotonic() - start) * 1000,
+                }
+
+            duration_ms = tool_result.get("duration_ms", 0)
+            success = tool_result.get("success", False)
+            output = tool_result.get("output", "")
+            error = tool_result.get("error")
+
+            # Build display output
+            display_output = str(output) if success else (error or "Tool execution failed")
+
+            # Emit tool_result event
+            yield _sse("tool_result", {
+                "id": tc_id,
+                "name": tool_name,
+                "success": success,
+                "output": display_output,
+                "duration_ms": round(duration_ms),
+            })
+
+            # Append tool result to messages for next LLM call
+            loop_messages.append({
+                "role": "tool",
+                "tool_call_id": tc_id,
+                "content": display_output,
+            })
+
+            # Persist tool result message
+            if conv_id:
+                await add_message(
+                    db, conv_id,
+                    role="tool",
+                    content=display_output,
+                    tool_call_id=tc_id,
+                )
+
+        # Emit iteration_start for next round
+        if iteration < max_iterations:
+            yield _sse("agent_status", {
+                "type": "iteration_start",
+                "iteration": iteration + 1,
+            })
+
+    # Max iterations reached
+    yield _sse("agent_status", {
+        "type": "agent_error",
+        "error": f"Max iterations ({max_iterations}) reached",
+        "iterations": max_iterations,
+    })
+    yield _sse_data("[DONE]")
 
 
 async def _persist_stream(

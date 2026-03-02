@@ -7,9 +7,34 @@ export interface ChatMessage {
   tool_call_id?: string;
 }
 
+// Agent SSE event types
+export interface ToolCallEvent {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface ToolResultEvent {
+  id: string;
+  name: string;
+  success: boolean;
+  output: string;
+  duration_ms: number;
+}
+
+export interface AgentStatusEvent {
+  type: "agent_start" | "agent_done" | "agent_error" | "iteration_start";
+  iteration?: number;
+  iterations?: number;
+  tools?: string[];
+  error?: string;
+}
+
 export interface StreamCallbacks {
   onToken: (token: string) => void;
-  onToolCall?: (toolCall: unknown) => void;
+  onToolCall?: (toolCall: ToolCallEvent) => void;
+  onToolResult?: (result: ToolResultEvent) => void;
+  onAgentStatus?: (status: AgentStatusEvent) => void;
   onDone: (conversationId?: string) => void;
   onError: (error: Error) => void;
 }
@@ -27,6 +52,9 @@ export interface StreamOptions {
   conversationId?: string;
   systemPrompt?: string;
   maxContextTokens?: number;
+  agentMode?: boolean;
+  agentTools?: string[];
+  maxIterations?: number;
 }
 
 export async function streamChat(
@@ -64,6 +92,9 @@ export async function streamChat(
         conversation_id: options.conversationId,
         system_prompt: options.systemPrompt,
         max_context_tokens: options.maxContextTokens ?? 8192,
+        agent_mode: options.agentMode ?? true,
+        agent_tools: options.agentTools,
+        max_iterations: options.maxIterations ?? 20,
       }),
     });
   } catch (err) {
@@ -90,6 +121,10 @@ export async function streamChat(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let inThinkBlock = false;
+
+  // Track current SSE event type (set by `event:` lines)
+  let currentEventType: string | null = null;
 
   try {
     while (true) {
@@ -101,6 +136,12 @@ export async function streamChat(
       buffer = lines.pop() || "";
 
       for (const line of lines) {
+        // Track SSE event type
+        if (line.startsWith("event: ")) {
+          currentEventType = line.slice(7).trim();
+          continue;
+        }
+
         if (!line.startsWith("data: ")) continue;
         const data = line.slice(6).trim();
         if (data === "[DONE]") {
@@ -110,12 +151,64 @@ export async function streamChat(
 
         try {
           const parsed = JSON.parse(data);
+
+          // Dispatch based on event type
+          if (currentEventType === "tool_call" && callbacks.onToolCall) {
+            callbacks.onToolCall(parsed as ToolCallEvent);
+            currentEventType = null;
+            continue;
+          }
+
+          if (currentEventType === "tool_result" && callbacks.onToolResult) {
+            callbacks.onToolResult(parsed as ToolResultEvent);
+            currentEventType = null;
+            continue;
+          }
+
+          if (currentEventType === "agent_status" && callbacks.onAgentStatus) {
+            callbacks.onAgentStatus(parsed as AgentStatusEvent);
+            currentEventType = null;
+            continue;
+          }
+
+          // Reset event type after processing
+          currentEventType = null;
+
+          // Default: standard content delta
           const delta = parsed.choices?.[0]?.delta;
           if (delta?.content) {
-            callbacks.onToken(delta.content);
+            // Filter out <think>...</think> reasoning blocks (Qwen3, etc.)
+            let content = delta.content as string;
+            if (inThinkBlock) {
+              const endIdx = content.indexOf("</think>");
+              if (endIdx !== -1) {
+                inThinkBlock = false;
+                content = content.slice(endIdx + 8);
+              } else {
+                content = "";
+              }
+            }
+            if (!inThinkBlock && content.includes("<think>")) {
+              const startIdx = content.indexOf("<think>");
+              const before = content.slice(0, startIdx);
+              const after = content.slice(startIdx + 7);
+              const endIdx = after.indexOf("</think>");
+              if (endIdx !== -1) {
+                content = before + after.slice(endIdx + 8);
+              } else {
+                content = before;
+                inThinkBlock = true;
+              }
+            }
+            if (content) {
+              callbacks.onToken(content);
+            }
           }
           if (delta?.tool_calls && callbacks.onToolCall) {
-            callbacks.onToolCall(delta.tool_calls);
+            // Legacy: pass-through raw tool_calls from non-agent streaming
+            for (const tc of delta.tool_calls) {
+              callbacks.onToolCall(tc);
+            }
           }
         } catch {
           // Skip malformed SSE lines

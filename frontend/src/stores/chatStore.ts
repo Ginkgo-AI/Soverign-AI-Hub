@@ -1,5 +1,17 @@
 import { create } from "zustand";
 import { apiJson } from "@/lib/api";
+import type { ToolCallEvent, ToolResultEvent } from "@/lib/streaming";
+
+function generateUUID(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for non-secure contexts (HTTP on non-localhost)
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
 
 export interface Message {
   id: string;
@@ -8,6 +20,13 @@ export interface Message {
   toolCalls?: unknown[];
   isStreaming?: boolean;
   timestamp: number;
+  // Agent tool-call fields
+  isToolCall?: boolean;
+  toolName?: string;
+  toolArguments?: Record<string, unknown>;
+  toolCallId?: string;
+  toolSuccess?: boolean;
+  toolDuration?: number;
 }
 
 export interface Conversation {
@@ -28,6 +47,10 @@ interface ChatState {
   isStreaming: boolean;
   isLoadingHistory: boolean;
 
+  // Agent mode state
+  agentMode: boolean;
+  enabledTools: string[];
+
   // API-backed actions
   fetchConversations: () => Promise<void>;
   loadConversation: (id: string) => Promise<void>;
@@ -41,6 +64,12 @@ interface ChatState {
   updateLastAssistantMessage: (conversationId: string, content: string) => void;
   setStreaming: (streaming: boolean) => void;
   setConversationId: (tempId: string, realId: string) => void;
+
+  // Agent mode actions
+  setAgentMode: (enabled: boolean) => void;
+  setEnabledTools: (tools: string[]) => void;
+  addToolCallMessage: (conversationId: string, toolCall: ToolCallEvent) => void;
+  addToolResultMessage: (conversationId: string, result: ToolResultEvent) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -48,6 +77,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeConversationId: null,
   isStreaming: false,
   isLoadingHistory: false,
+  agentMode: true,
+  enabledTools: [],
 
   fetchConversations: async () => {
     try {
@@ -94,6 +125,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           role: string;
           content: string | null;
           tool_calls: unknown[] | null;
+          tool_call_id: string | null;
           created_at: string;
         }>;
       }>(`/api/conversations/${id}`);
@@ -109,6 +141,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
                   role: m.role as Message["role"],
                   content: m.content || "",
                   toolCalls: m.tool_calls || undefined,
+                  toolCallId: m.tool_call_id || undefined,
+                  // Infer tool-call display fields from persisted data
+                  isToolCall: m.role === "assistant" && !!m.tool_calls?.length,
+                  toolName: m.role === "tool" ? (m.content?.split(":")[0] || "tool") : undefined,
                   timestamp: new Date(m.created_at).getTime(),
                 })),
               }
@@ -122,7 +158,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   createConversation: async (systemPrompt?: string) => {
-    const localId = crypto.randomUUID();
+    const localId = generateUUID();
     const now = Date.now();
 
     const conversation: Conversation = {
@@ -179,7 +215,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   addLocalMessage: (conversationId, message) => {
     const msg: Message = {
       ...message,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       timestamp: Date.now(),
     };
     set((state) => ({
@@ -214,6 +250,51 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ),
       activeConversationId:
         state.activeConversationId === tempId ? realId : state.activeConversationId,
+    }));
+  },
+
+  // Agent mode actions
+  setAgentMode: (enabled) => set({ agentMode: enabled }),
+
+  setEnabledTools: (tools) => set({ enabledTools: tools }),
+
+  addToolCallMessage: (conversationId, toolCall) => {
+    const msg: Message = {
+      id: generateUUID(),
+      role: "assistant",
+      content: "",
+      isToolCall: true,
+      toolName: toolCall.name,
+      toolArguments: toolCall.arguments,
+      toolCallId: toolCall.id,
+      timestamp: Date.now(),
+    };
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === conversationId
+          ? { ...c, messages: [...c.messages, msg], updatedAt: Date.now() }
+          : c
+      ),
+    }));
+  },
+
+  addToolResultMessage: (conversationId, result) => {
+    const msg: Message = {
+      id: generateUUID(),
+      role: "tool",
+      content: result.output,
+      toolName: result.name,
+      toolCallId: result.id,
+      toolSuccess: result.success,
+      toolDuration: result.duration_ms,
+      timestamp: Date.now(),
+    };
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === conversationId
+          ? { ...c, messages: [...c.messages, msg], updatedAt: Date.now() }
+          : c
+      ),
     }));
   },
 }));
