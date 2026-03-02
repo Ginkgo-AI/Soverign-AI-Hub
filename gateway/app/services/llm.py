@@ -38,6 +38,31 @@ class LLMBackend:
     ) -> dict | AsyncIterator[bytes]:
         client = self._get_client(backend)
 
+        # Auto-detect model if none specified — prefer larger chat models
+        if not model:
+            try:
+                models_resp = await client.get("/models")
+                models_data = models_resp.json().get("data", [])
+                if models_data:
+                    # Filter out embedding models, then pick the best candidate
+                    chat_models = [
+                        m["id"] for m in models_data
+                        if "embed" not in m["id"].lower()
+                    ]
+                    candidates = chat_models or [m["id"] for m in models_data]
+                    # Prefer mid-size chat models (8b sweet spot for local inference)
+                    def _model_score(name: str) -> int:
+                        """Higher score = prefer this model. Favor 7-8b range."""
+                        n = name.lower()
+                        for size, score in [("8b", 10), ("7b", 9), ("13b", 8), ("3b", 4), ("1b", 2), ("27b", 3), ("70b", 1)]:
+                            if size in n:
+                                return score
+                        return 5  # unknown size, middle priority
+                    candidates.sort(key=_model_score, reverse=True)
+                    model = candidates[0]
+            except Exception:
+                pass
+
         payload: dict[str, Any] = {
             "messages": messages,
             "temperature": temperature,
