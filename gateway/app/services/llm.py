@@ -1,9 +1,12 @@
 """Unified LLM client that routes to vLLM or llama.cpp backends."""
 
+import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 
@@ -63,10 +66,15 @@ class LLMBackend:
             except Exception:
                 pass
 
+        # Let the backend decide max_tokens if the caller requests more than
+        # a reasonable completion size.  Sending max_tokens equal to the full
+        # context window causes 400 errors when tools/messages consume tokens.
+        capped_max_tokens = min(max_tokens, 2048) if max_tokens else 2048
+
         payload: dict[str, Any] = {
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": max_tokens,
+            "max_tokens": capped_max_tokens,
             "stream": stream,
         }
         if model:
@@ -84,6 +92,8 @@ class LLMBackend:
             return self._stream_response(client, payload)
         else:
             response = await client.post("/chat/completions", json=payload)
+            if response.status_code >= 400:
+                logger.error("LLM backend returned %s: %s", response.status_code, response.text)
             response.raise_for_status()
             return response.json()
 

@@ -65,7 +65,7 @@ class ChatCompletionRequest(BaseModel):
     model: str = ""
     messages: list[ChatMessage]
     temperature: float = 0.7
-    max_tokens: int = 4096
+    max_tokens: int = 2048
     stream: bool = False
     tools: list[Tool] | None = None
     tool_choice: str | None = None
