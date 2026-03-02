@@ -10,6 +10,7 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { ModelSelector } from "@/components/shared/ModelSelector";
 import { ImageUpload } from "@/components/chat/ImageUpload";
 import { VoiceInput } from "@/components/chat/VoiceInput";
+import { ToolPicker } from "@/components/chat/ToolPicker";
 
 export default function ChatPage() {
   const {
@@ -17,11 +18,17 @@ export default function ChatPage() {
     activeConversationId,
     isStreaming,
     isLoadingHistory,
+    agentMode,
+    enabledTools,
     createConversation,
     addLocalMessage,
     updateLastAssistantMessage,
+    addToolCallMessage,
+    addToolResultMessage,
     setStreaming,
     setConversationId,
+    setAgentMode,
+    setEnabledTools,
     fetchConversations,
   } = useChatStore();
 
@@ -31,6 +38,7 @@ export default function ChatPage() {
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedBackend, setSelectedBackend] = useState("vllm");
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [agentIterations, setAgentIterations] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -70,14 +78,18 @@ export default function ChatPage() {
 
     addLocalMessage(convId, { role: "user", content: displayContent });
     setInput("");
+    setAgentIterations(0);
 
     // Build messages for API call
     const conv = useChatStore.getState().conversations.find((c) => c.id === convId);
     const apiMessages: ChatMessage[] =
-      conv?.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })) || [];
+      conv?.messages
+        .filter((m) => !m.isToolCall) // Don't send display-only tool-call messages
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+          ...(m.toolCallId && m.role === "tool" ? { tool_call_id: m.toolCallId } : {}),
+        })) || [];
 
     // If image is attached, modify the last user message to include vision content
     if (attachedImage && apiMessages.length > 0) {
@@ -104,12 +116,48 @@ export default function ChatPage() {
         updateLastAssistantMessage(convId!, accumulated);
         scrollToBottom();
       },
+      onToolCall: (toolCall) => {
+        // Remove the streaming placeholder if it's still empty
+        const currentConv = useChatStore.getState().conversations.find((c) => c.id === convId);
+        const lastMsg = currentConv?.messages[currentConv.messages.length - 1];
+        if (lastMsg?.isStreaming && !lastMsg.content) {
+          // Replace the empty streaming placeholder with the tool call
+          useChatStore.setState((state) => ({
+            conversations: state.conversations.map((c) => {
+              if (c.id !== convId) return c;
+              const msgs = c.messages.slice(0, -1); // Remove placeholder
+              return { ...c, messages: msgs };
+            }),
+          }));
+        }
+        addToolCallMessage(convId!, toolCall);
+        scrollToBottom();
+      },
+      onToolResult: (result) => {
+        addToolResultMessage(convId!, result);
+        // Add a new streaming placeholder for the next LLM response
+        addLocalMessage(convId!, { role: "assistant", content: "", isStreaming: true });
+        accumulated = "";
+        scrollToBottom();
+      },
+      onAgentStatus: (status) => {
+        if (status.type === "iteration_start" && status.iteration) {
+          setAgentIterations(status.iteration);
+        }
+        if (status.type === "agent_error") {
+          updateLastAssistantMessage(convId!, `Agent error: ${status.error}`);
+        }
+        if (status.type === "agent_done") {
+          setAgentIterations(0);
+        }
+      },
       onDone: (returnedConvId) => {
         // Update local ID with server-assigned conversation ID
         if (returnedConvId && convId && returnedConvId !== convId) {
           setConversationId(convId, returnedConvId);
         }
         setStreaming(false);
+        setAgentIterations(0);
         scrollToBottom();
       },
       onError: (error) => {
@@ -118,21 +166,26 @@ export default function ChatPage() {
           accumulated || `Error: ${error.message}`
         );
         setStreaming(false);
+        setAgentIterations(0);
       },
     }, {
       model: selectedModel,
       backend: selectedBackend,
       conversationId: activeConversationId || undefined,
+      agentMode,
+      agentTools: enabledTools.length > 0 ? enabledTools : undefined,
     });
   }, [
     input, isStreaming, activeConversationId, selectedModel, selectedBackend,
-    attachedImage, createConversation, addLocalMessage, updateLastAssistantMessage,
+    attachedImage, agentMode, enabledTools, createConversation, addLocalMessage,
+    updateLastAssistantMessage, addToolCallMessage, addToolResultMessage,
     setStreaming, scrollToBottom, setConversationId,
   ]);
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
     setStreaming(false);
+    setAgentIterations(0);
   }, [setStreaming]);
 
   const handleVoiceTranscription = useCallback(
@@ -161,14 +214,50 @@ export default function ChatPage() {
               </span>
             )}
           </div>
-          <ModelSelector
-            selectedModel={selectedModel}
-            selectedBackend={selectedBackend}
-            onModelChange={(model, backend) => {
-              setSelectedModel(model);
-              setSelectedBackend(backend);
-            }}
-          />
+          <div className="flex items-center gap-3">
+            {/* Agent Mode Toggle */}
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <span className="text-xs text-[var(--color-text-muted)]">Agent</span>
+              <button
+                onClick={() => setAgentMode(!agentMode)}
+                className={`relative w-9 h-5 rounded-full transition-colors ${
+                  agentMode
+                    ? "bg-[var(--color-accent)]"
+                    : "bg-[var(--color-border)]"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                    agentMode ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </label>
+
+            {/* Tool Picker (only visible when agent mode is on) */}
+            {agentMode && (
+              <ToolPicker
+                enabledTools={enabledTools}
+                onToolsChange={setEnabledTools}
+              />
+            )}
+
+            {/* Agent iteration indicator */}
+            {agentIterations > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-accent)]/20 text-[var(--color-accent)] font-mono">
+                iter {agentIterations}
+              </span>
+            )}
+
+            <ModelSelector
+              selectedModel={selectedModel}
+              selectedBackend={selectedBackend}
+              onModelChange={(model, backend) => {
+                setSelectedModel(model);
+                setSelectedBackend(backend);
+              }}
+            />
+          </div>
         </div>
 
         {/* Messages */}
@@ -293,6 +382,9 @@ export default function ChatPage() {
           </div>
           <div className="max-w-3xl mx-auto mt-1.5 flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
             <span>All processing is local. Your data never leaves this machine.</span>
+            {agentMode && (
+              <span className="text-[var(--color-accent)]">Agent mode active</span>
+            )}
           </div>
         </div>
       </div>
