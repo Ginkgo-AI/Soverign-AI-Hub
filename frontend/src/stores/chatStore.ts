@@ -51,6 +51,13 @@ interface ChatState {
   agentMode: boolean;
   enabledTools: string[];
 
+  // Osaurus-inspired state
+  activeSkillId: string | null;
+  memoryEnabled: boolean;
+  memoryCount: number;
+  workMode: boolean;
+  workTasks: Array<{id: string; title: string; status: string; output?: string}>;
+
   // API-backed actions
   fetchConversations: () => Promise<void>;
   loadConversation: (id: string) => Promise<void>;
@@ -70,6 +77,13 @@ interface ChatState {
   setEnabledTools: (tools: string[]) => void;
   addToolCallMessage: (conversationId: string, toolCall: ToolCallEvent) => void;
   addToolResultMessage: (conversationId: string, result: ToolResultEvent) => void;
+
+  // Osaurus-inspired actions
+  setActiveSkillId: (id: string | null) => void;
+  setMemoryEnabled: (enabled: boolean) => void;
+  setMemoryCount: (count: number) => void;
+  setWorkMode: (enabled: boolean) => void;
+  setWorkTasks: (tasks: Array<{id: string; title: string; status: string; output?: string}>) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -79,6 +93,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoadingHistory: false,
   agentMode: true,
   enabledTools: [],
+  activeSkillId: null,
+  memoryEnabled: true,
+  memoryCount: 0,
+  workMode: false,
+  workTasks: [],
 
   fetchConversations: async () => {
     try {
@@ -297,4 +316,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ),
     }));
   },
+
+  // Osaurus-inspired actions
+  setActiveSkillId: (id) => set({ activeSkillId: id }),
+  setMemoryEnabled: (enabled) => set({ memoryEnabled: enabled }),
+  setMemoryCount: (count) => set({ memoryCount: count }),
+  setWorkMode: (enabled) => set({ workMode: enabled }),
+  setWorkTasks: (tasks) => set({ workTasks: tasks }),
 }));

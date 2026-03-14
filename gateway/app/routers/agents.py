@@ -9,6 +9,7 @@ Adapted from Metis_2/backend/api/agentic.py for the Sovereign AI Hub.
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from typing import Any
@@ -410,6 +411,96 @@ async def approve_step(
         status=agent_result.status,
         message=f"Step approved and execution resumed. Final status: {agent_result.status}",
     )
+
+
+# =========================================================================
+# Cryptographic identity endpoints (Phase E)
+# =========================================================================
+
+@router.post("/agents/{agent_id}/identity")
+async def assign_agent_identity(
+    agent_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Generate and assign a cryptographic identity to an agent."""
+    from app.services.agent_identity import assign_identity
+    try:
+        result = await assign_identity(db, agent_id)
+        return {"agent_id": str(agent_id), **result}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/agents/{agent_id}/actions")
+async def list_agent_actions(
+    agent_id: uuid.UUID,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """List signed actions for an agent."""
+    from app.models.agent_identity import AgentAction
+    result = await db.execute(
+        select(AgentAction)
+        .where(AgentAction.agent_id == agent_id)
+        .order_by(AgentAction.created_at.desc())
+        .limit(limit)
+    )
+    actions = result.scalars().all()
+    return {
+        "actions": [
+            {
+                "id": str(a.id),
+                "action_type": a.action_type,
+                "action_hash": a.action_hash,
+                "signature": a.signature[:20] + "...",
+                "payload_summary": a.payload_summary,
+                "created_at": a.created_at.isoformat(),
+            }
+            for a in actions
+        ],
+        "total": len(actions),
+    }
+
+
+@router.post("/agents/{agent_id}/verify")
+async def verify_agent_action(
+    agent_id: uuid.UUID,
+    body: dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Verify a signed action."""
+    action_id = body.get("action_id")
+    if not action_id:
+        raise HTTPException(status_code=400, detail="action_id required")
+
+    from app.models.agent_identity import AgentAction
+    from app.services.agent_identity import verify_action
+    import json
+
+    # Load the action
+    action_result = await db.execute(
+        select(AgentAction).where(AgentAction.id == uuid.UUID(action_id))
+    )
+    action = action_result.scalar_one_or_none()
+    if action is None:
+        raise HTTPException(status_code=404, detail="Action not found")
+
+    # Load the agent's public key
+    agent_result = await db.execute(
+        select(AgentDefinition).where(AgentDefinition.id == agent_id)
+    )
+    agent = agent_result.scalar_one_or_none()
+    if agent is None or not agent.public_key:
+        raise HTTPException(status_code=400, detail="Agent has no cryptographic identity")
+
+    # Verify
+    payload = json.loads(action.payload_summary) if action.payload_summary else {}
+    verified = verify_action(agent.public_key, payload, action.signature)
+
+    return {"action_id": action_id, "verified": verified}
 
 
 @router.post("/agents/executions/{exec_id}/cancel", response_model=CancelOut)

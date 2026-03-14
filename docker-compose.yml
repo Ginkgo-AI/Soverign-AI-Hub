@@ -192,6 +192,7 @@ services:
         condition: service_healthy
     volumes:
       - file_storage:/data/files
+      - watch_data:/data/watch
 
   # ---------------------------------------------------------------------------
   # Frontend — Next.js application
@@ -352,4 +353,6 @@ volumes:
   comfyui_output:
     driver: local
   keycloak_data:
+    driver: local
+  watch_data:
     driver: local

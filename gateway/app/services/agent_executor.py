@@ -307,6 +307,16 @@ async def run_agent(
                 tool_result, 0,
             )
 
+            # Sign tool action if agent has identity
+            try:
+                from app.services.agent_identity import record_signed_action
+                await record_signed_action(
+                    db, agent.id, execution.id, "tool_call",
+                    {"tool_name": tool_name, "arguments": arguments},
+                )
+            except Exception:
+                pass  # Identity signing is optional
+
             # Append tool result message for LLM
             result_content = json.dumps(tool_result)
             messages.append({

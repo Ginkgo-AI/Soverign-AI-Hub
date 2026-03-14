@@ -17,6 +17,9 @@ class AgentDefinition(UUIDMixin, TimestampMixin, Base):
     tools: Mapped[dict] = mapped_column(JSON, default=list)
     permissions: Mapped[dict] = mapped_column(JSON, default=dict)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    # Phase E: Cryptographic identity
+    public_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    signing_key_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
 
 class AgentExecution(UUIDMixin, TimestampMixin, Base):
@@ -31,6 +34,9 @@ class AgentExecution(UUIDMixin, TimestampMixin, Base):
     final_output: Mapped[str | None] = mapped_column(Text, nullable=True)
     total_steps: Mapped[int] = mapped_column(Integer, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    # Phase D: Work mode
+    objective: Mapped[str | None] = mapped_column(Text, nullable=True)
+    work_mode: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class AgentStep(UUIDMixin, TimestampMixin, Base):

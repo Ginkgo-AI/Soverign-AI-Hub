@@ -88,6 +88,11 @@ class ChatCompletionRequest(BaseModel):
     max_iterations: int = 20
     agent_timeout: float = 300.0
 
+    # Osaurus-inspired extensions
+    skill_id: str | None = None
+    work_mode: bool = False
+    objective: str | None = None
+
 
 def _sse(event: str, data: dict | str) -> bytes:
     """Format a named SSE event."""
@@ -163,6 +168,44 @@ async def chat_completions(
     if request.repeat_penalty is not None:
         kwargs["repeat_penalty"] = request.repeat_penalty
 
+    # Inject memory context if enabled and user is authenticated
+    if user:
+        try:
+            from app.config import settings
+            if settings.memory_extraction_enabled:
+                from app.services.memory_service import get_memory_context, inject_memory_into_prompt
+                memory_ctx = await get_memory_context(db, user.id)
+                if memory_ctx.get("total", 0) > 0:
+                    # Find or create system message
+                    sys_msg = next((m for m in api_messages if m.get("role") == "system"), None)
+                    if sys_msg:
+                        sys_msg["content"] = inject_memory_into_prompt(sys_msg["content"], memory_ctx)
+                    else:
+                        base_prompt = request.system_prompt or "You are a helpful AI assistant."
+                        api_messages.insert(0, {
+                            "role": "system",
+                            "content": inject_memory_into_prompt(base_prompt, memory_ctx),
+                        })
+        except Exception:
+            logger.debug("Memory injection skipped", exc_info=True)
+
+    # Load skill configuration if skill_id is provided
+    skill_tools = None
+    if request.skill_id:
+        try:
+            from app.services.skill_service import activate_skill, get_skill_full
+            skill = await get_skill_full(db, uuid.UUID(request.skill_id))
+            if skill:
+                skill_prompt, skill_tools = activate_skill(skill)
+                # Replace or inject system prompt from skill
+                sys_msg = next((m for m in api_messages if m.get("role") == "system"), None)
+                if sys_msg:
+                    sys_msg["content"] = skill_prompt + "\n\n" + sys_msg["content"]
+                else:
+                    api_messages.insert(0, {"role": "system", "content": skill_prompt})
+        except Exception:
+            logger.debug("Skill activation skipped", exc_info=True)
+
     # Route to agent loop when agent_mode is enabled and streaming
     if request.stream and request.agent_mode:
         return StreamingResponse(
@@ -172,7 +215,7 @@ async def chat_completions(
                 backend=request.backend,
                 temperature=request.temperature,
                 max_tokens=request.max_tokens,
-                agent_tools=request.agent_tools,
+                agent_tools=skill_tools or request.agent_tools,
                 max_iterations=request.max_iterations,
                 agent_timeout=request.agent_timeout,
                 db=db,
@@ -345,6 +388,18 @@ async def _streaming_agent_loop(
                 "type": "agent_done",
                 "iterations": iteration,
             })
+
+            # Trigger background memory extraction
+            if conv_id and user_id:
+                try:
+                    from app.config import settings
+                    if settings.memory_extraction_enabled:
+                        asyncio.get_event_loop().create_task(
+                            _extract_memories_background(conv_id, uuid.UUID(user_id), loop_messages)
+                        )
+                except Exception:
+                    pass
+
             yield _sse_data("[DONE]")
             return
 
@@ -484,3 +539,21 @@ async def _persist_stream(
             content=accumulated_content or None,
             tool_calls=accumulated_tool_calls or None,
         )
+
+
+async def _extract_memories_background(
+    conv_id: uuid.UUID,
+    user_id: uuid.UUID,
+    messages: list[dict[str, Any]],
+) -> None:
+    """Background task to extract memories and summarize conversation."""
+    from app.database import async_session
+    from app.services.memory_service import extract_memories, summarize_conversation
+
+    try:
+        async with async_session() as db:
+            await extract_memories(db, user_id, conv_id, messages)
+            await summarize_conversation(db, user_id, conv_id, messages)
+            await db.commit()
+    except Exception:
+        logger.debug("Background memory extraction failed", exc_info=True)

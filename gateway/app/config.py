@@ -79,6 +79,16 @@ class Settings(BaseSettings):
     # SIEM integration (optional syslog/webhook URL)
     siem_endpoint: str = ""
 
+    # --- Feature flags (Osaurus-inspired features) ---
+    memory_extraction_enabled: bool = True
+    memory_qdrant_collection: str = "user_memories"
+    plugins_enabled: bool = True
+    skills_enabled: bool = True
+    work_mode_enabled: bool = True
+    automation_enabled: bool = True
+    watcher_base_path: str = "/data/watch"
+    mcp_enabled: bool = True
+
     @property
     def database_url(self) -> str:
         return (

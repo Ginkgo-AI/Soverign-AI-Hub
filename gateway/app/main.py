@@ -26,6 +26,7 @@ from app.routers import (
     training,
     vision,
 )
+from app.routers import automation, memory, mcp, plugins, skills, work_mode
 
 
 @asynccontextmanager
@@ -41,6 +42,50 @@ async def lifespan(app: FastAPI):
 
     register_builtin_tools()
 
+    # Create all tables if they don't exist (development convenience)
+    from app.models import Base
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # Seed default skills
+    if settings.skills_enabled:
+        from app.database import async_session
+        from app.services.skill_service import seed_default_skills
+
+        try:
+            async with async_session() as db:
+                await seed_default_skills(db)
+                await db.commit()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("Skill seeding skipped — tables may not exist yet")
+
+    # Load dynamic plugins from database
+    if settings.plugins_enabled:
+        from app.database import async_session
+        from app.services.plugin_manager import load_all_plugins
+
+        try:
+            async with async_session() as db:
+                await load_all_plugins(db)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("Plugin loading skipped — tables may not exist yet")
+
+    # Start automation services
+    if settings.automation_enabled:
+        from app.database import async_session
+        from app.services.scheduler_service import start_scheduler
+        from app.services.watcher_service import start_watchers
+
+        try:
+            async with async_session() as db:
+                await start_scheduler(db)
+                await start_watchers(db)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("Automation startup skipped — tables may not exist yet")
+
     yield
     # Shutdown
     from app.services.llm import llm_backend
@@ -53,6 +98,14 @@ async def lifespan(app: FastAPI):
     from app.services.audit import _flush_buffer
 
     await _flush_buffer()
+
+    # Stop automation services
+    if settings.automation_enabled:
+        from app.services.scheduler_service import stop_scheduler
+        from app.services.watcher_service import stop_watchers
+
+        await stop_scheduler()
+        await stop_watchers()
 
     from app.services.model_manager import model_manager
 
@@ -127,3 +180,29 @@ app.include_router(edge.router, prefix="/api", tags=["Edge Devices"])
 
 # Model Management controls (LM Studio-style)
 app.include_router(model_management.router, prefix="/api", tags=["Model Management"])
+
+# --- Osaurus-inspired feature endpoints ---
+
+# Phase A: Tool Plugins
+if settings.plugins_enabled:
+    app.include_router(plugins.router, prefix="/api", tags=["Plugins"])
+
+# Phase B: Memory System
+if settings.memory_extraction_enabled:
+    app.include_router(memory.router, prefix="/api", tags=["Memory"])
+
+# Phase C: Skills Registry
+if settings.skills_enabled:
+    app.include_router(skills.router, prefix="/api", tags=["Skills"])
+
+# Phase D: Work Mode
+if settings.work_mode_enabled:
+    app.include_router(work_mode.router, prefix="/api", tags=["Work Mode"])
+
+# Phase F: Automation
+if settings.automation_enabled:
+    app.include_router(automation.router, prefix="/api", tags=["Automation"])
+
+# Phase G: MCP Server
+if settings.mcp_enabled:
+    app.include_router(mcp.router, prefix="/mcp", tags=["MCP"])

@@ -30,10 +30,11 @@ class ToolSpec:
 
     name: str
     description: str
-    category: str  # search, code_execution, file_ops, data_analysis, http
+    category: str  # search, code_execution, file_ops, data_analysis, http, plugin
     parameters_schema: dict[str, Any]
     requires_approval: bool = False
     enabled: bool = True
+    is_builtin: bool = True
 
 
 @dataclass
@@ -83,6 +84,12 @@ class ToolRegistry:
         )
 
     def unregister(self, name: str) -> bool:
+        registered = self._tools.get(name)
+        if registered is None:
+            return False
+        if registered.spec.is_builtin:
+            logger.warning("Cannot unregister built-in tool: %s", name)
+            return False
         return self._tools.pop(name, None) is not None
 
     # -- lookup -------------------------------------------------------------

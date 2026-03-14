@@ -11,6 +11,9 @@ import { ModelSelector } from "@/components/shared/ModelSelector";
 import { ImageUpload } from "@/components/chat/ImageUpload";
 import { VoiceInput } from "@/components/chat/VoiceInput";
 import { ToolPicker } from "@/components/chat/ToolPicker";
+import { MemoryIndicator } from "@/components/chat/MemoryIndicator";
+import { SkillPicker as SkillPickerComponent } from "@/components/chat/SkillPicker";
+import { WorkModePanel } from "@/components/chat/WorkModePanel";
 
 export default function ChatPage() {
   const {
@@ -208,6 +211,7 @@ export default function ChatPage() {
             <h2 className="text-sm font-medium truncate max-w-xs">
               {activeConversation?.title || "New Conversation"}
             </h2>
+            <MemoryIndicator />
             {activeConversation?.classificationLevel && (
               <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-[var(--color-unclassified)]/20 text-[var(--color-unclassified)]">
                 {activeConversation.classificationLevel}
@@ -233,6 +237,9 @@ export default function ChatPage() {
                 />
               </button>
             </label>
+
+            {/* Skill Picker */}
+            {agentMode && <SkillPickerComponent />}
 
             {/* Tool Picker (only visible when agent mode is on) */}
             {agentMode && (
@@ -301,6 +308,9 @@ export default function ChatPage() {
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Work Mode Panel */}
+        <WorkModePanel />
 
         {/* Attached image preview */}
         {attachedImage && (

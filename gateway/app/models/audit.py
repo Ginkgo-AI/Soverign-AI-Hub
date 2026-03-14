@@ -26,3 +26,5 @@ class AuditLog(Base):
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     classification_level: Mapped[str] = mapped_column(String(50), default="UNCLASSIFIED")
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
+    # Phase E: Cryptographic signature
+    signature: Mapped[str | None] = mapped_column(Text, nullable=True)

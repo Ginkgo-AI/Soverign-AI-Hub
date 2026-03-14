@@ -16,6 +16,10 @@ import {
   Radio,
   Settings,
   User,
+  Puzzle,
+  Sparkles,
+  Zap,
+  Brain,
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -62,17 +66,21 @@ function Sidebar() {
         <NavItem href="/code" label="Code" icon={<Code2 size={16} />} />
         <NavItem href="/collections" label="Knowledge Base" icon={<Database size={16} />} />
         <NavItem href="/agents" label="Agents" icon={<Bot size={16} />} />
+        <NavItem href="/skills" label="Skills" icon={<Sparkles size={16} />} />
         <NavItem href="/workflows" label="Workflows" icon={<GitBranch size={16} />} />
+        <NavItem href="/automation" label="Automation" icon={<Zap size={16} />} />
         <NavItem href="/models" label="Models" icon={<Boxes size={16} />} />
       </nav>
       <div className="p-2 border-t border-[var(--color-border)] space-y-0.5">
         <NavItem href="/admin" label="Admin" icon={<Shield size={16} />} />
+        <SubNavItem href="/admin/plugins" label="Plugins" icon={<Puzzle size={14} />} />
         <SubNavItem href="/admin/users" label="Users" icon={<Users size={14} />} />
         <SubNavItem href="/admin/audit" label="Audit" icon={<FileText size={14} />} />
         <SubNavItem href="/admin/security" label="Security" icon={<Lock size={14} />} />
         <SubNavItem href="/admin/compliance" label="Compliance" icon={<ClipboardCheck size={14} />} />
         <SubNavItem href="/admin/edge" label="Edge Devices" icon={<Radio size={14} />} />
         <NavItem href="/settings" label="Settings" icon={<Settings size={16} />} />
+        <SubNavItem href="/settings/memory" label="Memory" icon={<Brain size={14} />} />
         <NavItem href="/login" label="Account" icon={<User size={16} />} />
       </div>
     </aside>

@@ -23,11 +23,16 @@ export interface ToolResultEvent {
 }
 
 export interface AgentStatusEvent {
-  type: "agent_start" | "agent_done" | "agent_error" | "iteration_start";
+  type: "agent_start" | "agent_done" | "agent_error" | "iteration_start" | "task_created" | "task_started" | "task_completed" | "task_failed";
   iteration?: number;
   iterations?: number;
   tools?: string[];
   error?: string;
+  // Work mode task fields
+  task_id?: string;
+  task_title?: string;
+  task_status?: string;
+  task_output?: string;
 }
 
 export interface StreamCallbacks {
@@ -55,6 +60,10 @@ export interface StreamOptions {
   agentMode?: boolean;
   agentTools?: string[];
   maxIterations?: number;
+  // Osaurus-inspired extensions
+  skillId?: string;
+  workMode?: boolean;
+  objective?: string;
 }
 
 export async function streamChat(
@@ -95,6 +104,9 @@ export async function streamChat(
         agent_mode: options.agentMode ?? true,
         agent_tools: options.agentTools,
         max_iterations: options.maxIterations ?? 20,
+        skill_id: options.skillId,
+        work_mode: options.workMode,
+        objective: options.objective,
       }),
     });
   } catch (err) {
