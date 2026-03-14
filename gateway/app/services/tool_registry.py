@@ -189,14 +189,14 @@ RAG_SEARCH_SPEC = ToolSpec(
 
 PYTHON_EXEC_SPEC = ToolSpec(
     name="python_exec",
-    description="Execute a Python code snippet in a sandboxed subprocess. Returns stdout/stderr.",
+    description="Execute Python code. Available: numpy, pandas. You MUST use print() to produce output — the result is captured from stdout. For charts/visualizations: use print() to output a JSON array of objects (e.g. print(json.dumps(data))) — the UI auto-renders it as an interactive chart. Do NOT use matplotlib.",
     category="code_execution",
     parameters_schema={
         "type": "object",
         "properties": {
             "code": {
                 "type": "string",
-                "description": "Python source code to execute",
+                "description": "Python source code to execute. For charts, print JSON array to stdout.",
             },
             "timeout": {
                 "type": "integer",

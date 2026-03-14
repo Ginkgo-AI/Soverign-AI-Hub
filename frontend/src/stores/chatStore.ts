@@ -27,6 +27,7 @@ export interface Message {
   toolCallId?: string;
   toolSuccess?: boolean;
   toolDuration?: number;
+  toolImages?: Array<{ filename: string; data_url: string }>;
 }
 
 export interface Conversation {
@@ -306,6 +307,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       toolCallId: result.id,
       toolSuccess: result.success,
       toolDuration: result.duration_ms,
+      toolImages: result.images,
       timestamp: Date.now(),
     };
     set((state) => ({

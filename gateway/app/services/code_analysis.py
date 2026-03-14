@@ -318,6 +318,13 @@ CODE_GENERATE_SYSTEM_PROMPT = """You are an expert programmer. Generate clean, w
 - Add docstrings/comments where helpful
 - Keep the code focused and minimal
 
+Available Python libraries: numpy, pandas, httpx, cryptography, openpyxl.
+IMPORTANT — For charts and visualizations: Do NOT use matplotlib. Instead, generate the data and print it as a JSON array. The frontend will automatically render it as an interactive chart. Example output:
+```json
+[{"date": "2024-01-01", "price": 150.5, "volume": 1200}, {"date": "2024-01-02", "price": 152.3, "volume": 1350}]
+```
+The chart type (bar, line, pie, area) is auto-detected from the data structure. For time series or many data points, use a line chart. Print ONLY the JSON array to stdout — no other text.
+
 Return ONLY the code wrapped in a code block with the language specified."""
 
 COMMIT_MESSAGE_SYSTEM_PROMPT = """You are a developer generating a git commit message from a diff.

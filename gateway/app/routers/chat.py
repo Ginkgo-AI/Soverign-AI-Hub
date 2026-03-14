@@ -465,13 +465,17 @@ async def _streaming_agent_loop(
             display_output = str(output) if success else (error or "Tool execution failed")
 
             # Emit tool_result event
-            yield _sse("tool_result", {
+            tool_result_event = {
                 "id": tc_id,
                 "name": tool_name,
                 "success": success,
                 "output": display_output,
                 "duration_ms": round(duration_ms),
-            })
+            }
+            # Include generated images if present
+            if tool_result.get("images"):
+                tool_result_event["images"] = tool_result["images"]
+            yield _sse("tool_result", tool_result_event)
 
             # Append tool result to messages for next LLM call
             loop_messages.append({

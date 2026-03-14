@@ -128,6 +128,51 @@ async def _handle_rag_search(
     }
 
 
+def _collect_new_images(before: set[Path]) -> list[dict[str, str]]:
+    """Detect image files created in WORKSPACE_ROOT since 'before' snapshot."""
+    import base64
+
+    images: list[dict[str, str]] = []
+    if not WORKSPACE_ROOT.exists():
+        return images
+    new_files = set(WORKSPACE_ROOT.iterdir()) - before
+    for f in sorted(new_files):
+        if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".svg"):
+            try:
+                data = f.read_bytes()
+                mime = "image/png" if f.suffix == ".png" else "image/jpeg" if f.suffix in (".jpg", ".jpeg") else "image/svg+xml"
+                b64 = base64.b64encode(data).decode()
+                images.append({"filename": f.name, "data_url": f"data:{mime};base64,{b64}"})
+            except Exception:
+                pass
+    return images
+
+
+def _auto_print_last_expr(code: str) -> str:
+    """If the last statement is an expression (not print/assignment), wrap it with print()."""
+    import ast
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return code
+    if not tree.body:
+        return code
+    last = tree.body[-1]
+    if isinstance(last, ast.Expr) and not (
+        isinstance(last.value, ast.Call)
+        and isinstance(last.value.func, ast.Name)
+        and last.value.func.id == "print"
+    ):
+        lines = code.split("\n")
+        # Find the last non-empty line and wrap it
+        for i in range(len(lines) - 1, -1, -1):
+            if lines[i].strip():
+                lines[i] = f"print({lines[i].strip()})"
+                break
+        return "\n".join(lines)
+    return code
+
+
 async def _handle_python_exec(
     code: str,
     timeout: int = 30,
@@ -135,6 +180,15 @@ async def _handle_python_exec(
     blocked = _check_blocked(code)
     if blocked:
         raise PermissionError(f"Blocked pattern detected: {blocked}")
+
+    # Auto-print last expression if it's not already a print call
+    code = _auto_print_last_expr(code)
+
+    # Ensure workspace exists for file output
+    WORKSPACE_ROOT.mkdir(parents=True, exist_ok=True)
+
+    # Snapshot existing files so we can detect new ones
+    existing_files = set(WORKSPACE_ROOT.iterdir()) if WORKSPACE_ROOT.exists() else set()
 
     start = time.time()
     try:
@@ -144,6 +198,7 @@ async def _handle_python_exec(
             code,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=str(WORKSPACE_ROOT),
             env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -155,11 +210,15 @@ async def _handle_python_exec(
                 error=stderr.decode(errors="replace")[:4096],
                 duration_ms=duration,
             )
-        return _make_result(
-            success=True,
-            output=stdout.decode(errors="replace")[:8192],
-            duration_ms=duration,
-        )
+
+        output = stdout.decode(errors="replace")[:8192]
+        result = _make_result(success=True, output=output, duration_ms=duration)
+
+        # Attach any new images as base64 data URLs
+        images = _collect_new_images(existing_files)
+        if images:
+            result["images"] = images
+        return result
     except asyncio.TimeoutError:
         return _make_result(success=False, error=f"Execution timed out after {timeout}s")
 

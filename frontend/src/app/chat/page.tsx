@@ -44,6 +44,7 @@ export default function ChatPage() {
   const [agentIterations, setAgentIterations] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Load auth and conversation history on mount
   useEffect(() => {
@@ -59,6 +60,13 @@ export default function ChatPage() {
   const activeConversation = conversations.find(
     (c) => c.id === activeConversationId
   );
+
+  // Auto-focus the input when conversation changes or streaming ends
+  useEffect(() => {
+    if (!isStreaming) {
+      inputRef.current?.focus();
+    }
+  }, [activeConversationId, isStreaming]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -347,6 +355,8 @@ export default function ChatPage() {
 
             {/* Text input */}
             <textarea
+              ref={inputRef}
+              autoFocus
               value={input}
               onChange={(e) => {
                 setInput(e.target.value);

@@ -20,6 +20,7 @@ export interface ToolResultEvent {
   success: boolean;
   output: string;
   duration_ms: number;
+  images?: Array<{ filename: string; data_url: string }>;
 }
 
 export interface AgentStatusEvent {

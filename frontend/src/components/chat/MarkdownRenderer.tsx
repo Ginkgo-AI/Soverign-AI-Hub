@@ -4,6 +4,10 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useState } from "react";
+import dynamic from "next/dynamic";
+import { isChartData } from "./chartUtils";
+
+const AutoChart = dynamic(() => import("./AutoChart"), { ssr: false });
 
 interface MarkdownRendererProps {
   content: string;
@@ -105,8 +109,16 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
   );
 }
 
+const CHART_LANGUAGES = ["json", "chart", "data", "graph", "visualization", "vis", "plot"];
+
 function CodeBlock({ language, code }: { language: string; code: string }) {
   const [copied, setCopied] = useState(false);
+
+  // Auto-detect chart data in JSON/chart code blocks
+  const shouldCheckForChart = CHART_LANGUAGES.includes(language.toLowerCase()) || !language;
+  if (shouldCheckForChart && isChartData(code)) {
+    return <AutoChart data={code} />;
+  }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);

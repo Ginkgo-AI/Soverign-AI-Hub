@@ -3,7 +3,11 @@
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ThinkingBlock } from "./ThinkingBlock";
 import { AudioPlayer } from "./AudioPlayer";
+import dynamic from "next/dynamic";
+import { isChartData } from "./chartUtils";
 import type { Message } from "@/stores/chatStore";
+
+const AutoChart = dynamic(() => import("./AutoChart"), { ssr: false });
 
 interface MessageBubbleProps {
   message: Message;
@@ -129,14 +133,32 @@ function ToolResultBubble({ message }: { message: Message }) {
           )}
         </div>
         {message.content && (
-          <details open={!success || message.content.length < 300}>
-            <summary className="cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
-              {success ? "Output" : "Error details"}
-            </summary>
-            <pre className="mt-1 p-2 rounded bg-[#1a1a2e] text-[var(--color-text-muted)] overflow-x-auto max-h-64 overflow-y-auto text-[11px] leading-relaxed whitespace-pre-wrap">
-              {message.content}
-            </pre>
-          </details>
+          success && isChartData(message.content.trim()) ? (
+            <AutoChart data={message.content.trim()} />
+          ) : (
+            <details open={!success || message.content.length < 300}>
+              <summary className="cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                {success ? "Output" : "Error details"}
+              </summary>
+              <pre className="mt-1 p-2 rounded bg-[#1a1a2e] text-[var(--color-text-muted)] overflow-x-auto max-h-64 overflow-y-auto text-[11px] leading-relaxed whitespace-pre-wrap">
+                {message.content}
+              </pre>
+            </details>
+          )
+        )}
+        {message.toolImages && message.toolImages.length > 0 && (
+          <div className="mt-2 space-y-2">
+            {message.toolImages.map((img, i) => (
+              <div key={i}>
+                <p className="text-[10px] text-[var(--color-text-muted)] mb-1">{img.filename}</p>
+                <img
+                  src={img.data_url}
+                  alt={img.filename}
+                  className="rounded border border-[var(--color-border)] max-w-full"
+                />
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
