@@ -1,8 +1,16 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
 
+export type MessageContent =
+  | string
+  | null
+  | Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string } }
+    >;
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool";
-  content: string | null;
+  content: MessageContent;
   tool_calls?: unknown[];
   tool_call_id?: string;
 }

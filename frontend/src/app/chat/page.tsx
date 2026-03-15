@@ -113,7 +113,10 @@ export default function ChatPage() {
     if (attachedImage && apiMessages.length > 0) {
       const lastMsg = apiMessages[apiMessages.length - 1];
       if (lastMsg.role === "user") {
-        lastMsg.content = `[Analyze this image: ${attachedImage.substring(0, 50)}...] ${userText}`;
+        lastMsg.content = [
+          { type: "text" as const, text: userText },
+          { type: "image_url" as const, image_url: { url: attachedImage } },
+        ];
       }
     }
 

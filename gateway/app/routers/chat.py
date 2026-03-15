@@ -29,6 +29,29 @@ from app.services.tool_registry import tool_registry
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
+def _extract_text(content: str | list | None) -> str:
+    """Extract plain text from a message content field (string or multimodal array)."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    # Multimodal content array — extract text parts
+    parts = []
+    for part in content:
+        if isinstance(part, dict) and part.get("type") == "text":
+            parts.append(part.get("text", ""))
+    return " ".join(parts)
+
+
+def _serialize_content(content: str | list | None) -> str | None:
+    """Serialize content for DB storage. Lists become JSON strings."""
+    if content is None:
+        return None
+    if isinstance(content, str):
+        return content
+    return json.dumps(content)
+
 # Default tools enabled when agent_mode is on and no explicit list is provided
 CHAT_DEFAULT_TOOLS = [
     "calculator",
@@ -45,7 +68,7 @@ CHAT_DEFAULT_TOOLS = [
 
 class ChatMessage(BaseModel):
     role: str
-    content: str | None = None
+    content: str | list[dict[str, Any]] | None = None
     tool_calls: list[dict[str, Any]] | None = None
     tool_call_id: str | None = None
 
@@ -123,8 +146,8 @@ async def chat_completions(
         # Save the user message
         user_msg = next((m for m in reversed(request.messages) if m.role == "user"), None)
         if user_msg and user_msg.content:
-            await add_message(db, conv_id, role="user", content=user_msg.content)
-            await auto_title(db, conv_id, user_msg.content)
+            await add_message(db, conv_id, role="user", content=_serialize_content(user_msg.content))
+            await auto_title(db, conv_id, _extract_text(user_msg.content))
 
         # Load full history and apply context windowing
         all_messages = await get_messages(db, conv_id)
@@ -144,8 +167,8 @@ async def chat_completions(
                 system_prompt=request.system_prompt,
             )
             conv_id = conv.id
-            await add_message(db, conv_id, role="user", content=user_msg.content)
-            await auto_title(db, conv_id, user_msg.content)
+            await add_message(db, conv_id, role="user", content=_serialize_content(user_msg.content))
+            await auto_title(db, conv_id, _extract_text(user_msg.content))
 
         api_messages = [m.model_dump(exclude_none=True) for m in request.messages]
     else:
