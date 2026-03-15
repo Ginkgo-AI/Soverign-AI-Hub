@@ -25,22 +25,16 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="w-12 border-r border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col shrink-0 items-center relative">
-        {/* Gradient top accent */}
-        <div className="absolute top-0 left-0 right-0 h-[1px]" style={{ background: "var(--gradient-accent)" }} />
-
+      <aside className="w-[52px] bg-[var(--color-bg)] flex flex-col shrink-0 items-center border-r border-[var(--color-border)]">
         {/* Logo */}
-        <div className="py-3 flex items-center justify-center">
-          <a href="/chat" title="Home">
-            <Logo size={24} compact />
+        <div className="h-14 flex items-center justify-center">
+          <a href="/chat" title="Home" className="opacity-80 hover:opacity-100 transition-opacity">
+            <Logo size={22} compact />
           </a>
         </div>
 
-        {/* Separator */}
-        <div className="w-6 h-px bg-[var(--color-border)] mb-1" />
-
         {/* Primary nav */}
-        <nav className="flex-1 flex flex-col items-center gap-0.5 py-1">
+        <nav className="flex-1 flex flex-col items-center gap-1 py-2">
           {DOCK_ITEMS.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
@@ -48,37 +42,33 @@ export default function Sidebar() {
                 key={item.href}
                 href={item.href}
                 title={item.label}
-                className={`relative flex items-center justify-center w-9 h-9 rounded-lg transition-all
+                className={`relative flex items-center justify-center w-9 h-9 rounded-xl transition-all
                   ${active
-                    ? "text-white bg-white/[0.08]"
-                    : "text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-white/[0.04]"
+                    ? "text-[var(--color-text)] bg-[var(--color-surface-hover)]"
+                    : "text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]"
                   }`}
               >
                 {active && (
-                  <div
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-3 rounded-full"
-                    style={{ background: "var(--gradient-accent)" }}
-                  />
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-full bg-[var(--color-accent)]" />
                 )}
-                <item.icon size={18} className={active ? "text-[var(--color-accent)]" : ""} />
+                <item.icon size={17} strokeWidth={active ? 2 : 1.5} />
               </a>
             );
           })}
         </nav>
 
-        {/* Separator */}
-        <div className="w-6 h-px bg-[var(--color-border)] mb-1" />
-
-        {/* Settings gear */}
+        {/* Settings */}
         <div className="py-3">
           <button
             onClick={() => setSettingsOpen(true)}
             title="Settings & Admin"
-            className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all
-              text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-white/[0.04]
-              ${settingsOpen ? "text-white bg-white/[0.08]" : ""}`}
+            className={`flex items-center justify-center w-9 h-9 rounded-xl transition-all
+              ${settingsOpen
+                ? "text-[var(--color-text)] bg-[var(--color-surface-hover)]"
+                : "text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]"
+              }`}
           >
-            <Settings size={18} />
+            <Settings size={17} strokeWidth={1.5} />
           </button>
         </div>
       </aside>

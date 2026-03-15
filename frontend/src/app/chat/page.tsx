@@ -221,46 +221,40 @@ export default function ChatPage() {
   ];
 
   return (
-    <div className="flex flex-col h-full">
-      {/* ═══ Conversation Header (only when in a conversation) ═══ */}
+    <div className="flex flex-col h-full bg-[var(--color-bg)]">
+      {/* ═══ Conversation Header ═══ */}
       {!isLaunchpad && (
-        <div className="px-4 py-2.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex items-center gap-3">
-          {/* Back button */}
+        <div className="h-14 px-5 flex items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-bg)]">
           <button
             onClick={handleBackToLaunchpad}
-            className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-white/[0.04] transition-colors"
+            className="p-2 -ml-2 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
             title="Back to conversations"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={16} />
           </button>
 
-          {/* Title */}
-          <h2 className="text-sm font-medium truncate flex-1">
+          <h2 className="text-[13px] font-medium text-[var(--color-text-secondary)] truncate flex-1">
             {activeConversation?.title || "New Conversation"}
           </h2>
 
-          {/* Agent indicator */}
           <button
             onClick={() => setAgentMode(!agentMode)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
-            style={{
-              background: agentMode ? "rgba(34, 197, 94, 0.15)" : "rgba(255,255,255,0.04)",
-              color: agentMode ? "#22c55e" : "var(--color-text-muted)",
-            }}
-            title={agentMode ? "Agent mode on" : "Agent mode off"}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${
+              agentMode
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+            }`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${agentMode ? "bg-green-400" : "bg-[var(--color-text-muted)]"}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${agentMode ? "bg-emerald-400" : "bg-[var(--color-text-muted)]"}`} />
             Agent
           </button>
 
-          {/* Agent iteration indicator */}
           {agentIterations > 0 && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-accent)]/20 text-[var(--color-accent)] font-mono">
+            <span className="text-[11px] px-2.5 py-1 rounded-full bg-[var(--color-accent-subtle)] text-[var(--color-accent-hover)] font-mono tabular-nums">
               iter {agentIterations}
             </span>
           )}
 
-          {/* Model selector */}
           <ModelSelector
             selectedModel={selectedModel}
             selectedBackend={selectedBackend}
@@ -270,18 +264,17 @@ export default function ChatPage() {
             }}
           />
 
-          {/* More menu */}
           <div className="relative">
             <button
               onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-              className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-white/[0.04] transition-colors"
+              className="p-2 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
             >
-              <MoreHorizontal size={18} />
+              <MoreHorizontal size={16} />
             </button>
             {moreMenuOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setMoreMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 z-40 w-56 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl py-1">
+                <div className="absolute right-0 top-full mt-2 z-40 w-60 bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-xl shadow-2xl py-2">
                   <div className="px-3 py-2">
                     <MemoryIndicator />
                   </div>
@@ -291,16 +284,13 @@ export default function ChatPage() {
                         <SkillPickerComponent />
                       </div>
                       <div className="px-3 py-2 border-t border-[var(--color-border)]">
-                        <ToolPicker
-                          enabledTools={enabledTools}
-                          onToolsChange={setEnabledTools}
-                        />
+                        <ToolPicker enabledTools={enabledTools} onToolsChange={setEnabledTools} />
                       </div>
                     </>
                   )}
                   {activeConversation?.classificationLevel && (
                     <div className="px-3 py-2 border-t border-[var(--color-border)]">
-                      <span className="px-2 py-0.5 text-xs font-bold rounded bg-[var(--color-unclassified)]/20 text-[var(--color-unclassified)]">
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-[var(--color-unclassified)]/20 text-[var(--color-unclassified)] tracking-wide">
                         {activeConversation.classificationLevel}
                       </span>
                     </div>
@@ -310,13 +300,12 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* History button */}
           <button
             onClick={() => setHistoryOpen(true)}
-            className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-white/[0.04] transition-colors"
+            className="p-2 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
             title="Conversation history"
           >
-            <Clock size={18} />
+            <Clock size={16} />
           </button>
         </div>
       )}
@@ -324,30 +313,29 @@ export default function ChatPage() {
       {/* ═══ Main Content ═══ */}
       {isLoadingHistory ? (
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-sm text-[var(--color-text-muted)]">Loading conversation...</p>
+          <div className="w-5 h-5 border-2 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
         </div>
       ) : isLaunchpad ? (
-        /* ═══ Launchpad Empty State ═══ */
-        <div className="flex-1 flex flex-col items-center justify-center px-4 relative">
-          {/* Ambient glow */}
-          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[var(--color-accent)]/[0.03] rounded-full blur-[120px] pointer-events-none" />
+        /* ═══ Launchpad ═══ */
+        <div className="flex-1 flex flex-col items-center px-6 relative overflow-y-auto">
+          {/* Subtle ambient light */}
+          <div className="absolute top-[20%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-[var(--color-accent)]/[0.03] rounded-full blur-[150px] pointer-events-none" />
 
-          <div className="relative w-full max-w-2xl mx-auto" style={{ marginTop: "-8vh" }}>
-            {/* Logo */}
-            <div className="flex justify-center mb-4">
-              <Logo size={56} compact />
+          <div className="relative w-full max-w-[640px] mx-auto mt-[16vh]">
+            {/* Minimal branding */}
+            <div className="flex justify-center mb-6">
+              <Logo size={40} compact />
             </div>
 
-            {/* Title */}
-            <h1 className="text-2xl font-bold text-center mb-2">
-              Sovereign <span className="gradient-text">AI Hub</span>
+            <h1 className="text-[28px] font-semibold text-center tracking-tight mb-1">
+              Sovereign <span className="gradient-text">AI</span>
             </h1>
-            <p className="text-center text-[var(--color-text-muted)] text-sm mb-8">
+            <p className="text-center text-[var(--color-text-muted)] text-[13px] mb-10">
               What would you like to work on?
             </p>
 
-            {/* Input area */}
-            <div className="relative rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg focus-within:border-[var(--color-accent)] focus-within:shadow-[0_0_0_2px_rgba(59,130,246,0.1)] transition-all">
+            {/* Hero input */}
+            <div className="hero-input relative">
               <textarea
                 ref={inputRef}
                 autoFocus
@@ -364,14 +352,13 @@ export default function ChatPage() {
                     if (!isStreaming && input.trim()) handleSend();
                   }
                 }}
-                placeholder="Type a message, paste a doc, or try a suggestion below..."
-                rows={3}
-                className="w-full bg-transparent px-4 pt-4 pb-14 text-sm resize-none focus:outline-none placeholder:text-[var(--color-text-muted)]/60 max-h-[300px]"
+                placeholder="Ask anything..."
+                rows={2}
+                className="w-full bg-transparent px-5 pt-5 pb-16 text-[15px] resize-none focus:outline-none placeholder:text-[var(--color-text-muted)] max-h-[300px] leading-relaxed"
                 style={{ border: "none", boxShadow: "none" }}
               />
 
-              {/* Bottom bar inside input */}
-              <div className="absolute bottom-0 left-0 right-0 px-3 py-2.5 flex items-center gap-2">
+              <div className="absolute bottom-0 left-0 right-0 px-4 py-3 flex items-center gap-2">
                 {!attachedImage && (
                   <ImageUpload
                     onImageSelected={setAttachedImage}
@@ -380,19 +367,16 @@ export default function ChatPage() {
                     disabled={isStreaming}
                   />
                 )}
-                <VoiceInput
-                  onTranscription={handleVoiceTranscription}
-                  disabled={isStreaming}
-                />
+                <VoiceInput onTranscription={handleVoiceTranscription} disabled={isStreaming} />
                 <button
                   onClick={() => setAgentMode(!agentMode)}
-                  className="flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-colors"
-                  style={{
-                    background: agentMode ? "rgba(34, 197, 94, 0.15)" : "transparent",
-                    color: agentMode ? "#22c55e" : "var(--color-text-muted)",
-                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${
+                    agentMode
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : "text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+                  }`}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full ${agentMode ? "bg-green-400" : "bg-[var(--color-text-muted)]"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${agentMode ? "bg-emerald-400" : "bg-[var(--color-text-muted)]"}`} />
                   Agent
                 </button>
 
@@ -408,17 +392,16 @@ export default function ChatPage() {
                   <button
                     onClick={handleSend}
                     disabled={!input.trim() || isStreaming}
-                    className="p-2 rounded-lg btn-gradient disabled:opacity-30 disabled:transform-none"
+                    className="w-9 h-9 flex items-center justify-center rounded-xl btn-gradient disabled:opacity-20"
                   >
-                    <Send size={16} />
+                    <Send size={15} />
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Attached image preview */}
             {attachedImage && (
-              <div className="mt-2">
+              <div className="mt-3">
                 <ImageUpload
                   onImageSelected={setAttachedImage}
                   onRemove={() => setAttachedImage(null)}
@@ -428,23 +411,23 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Suggestions */}
-            <div className="mt-4 space-y-1.5">
+            {/* Suggestions — clean, airy */}
+            <div className="mt-6 grid grid-cols-2 gap-2">
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s.label}
                   onClick={() => setInput(s.action)}
-                  className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-white/[0.03] transition-colors"
+                  className="flex items-start gap-2.5 text-left px-4 py-3 rounded-xl border border-[var(--color-border)] text-[13px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:border-[rgba(255,255,255,0.1)] hover:bg-[var(--color-surface)] transition-all"
                 >
-                  <ArrowUpRight size={14} className="shrink-0 opacity-50" />
-                  {s.label}
+                  <ArrowUpRight size={13} className="shrink-0 mt-0.5 opacity-40" />
+                  <span>{s.label}</span>
                 </button>
               ))}
             </div>
 
-            {/* Recent conversations as chips */}
+            {/* Recent conversations */}
             {conversations.length > 0 && (
-              <div className="mt-6 flex flex-wrap gap-2 justify-center">
+              <div className="mt-8 flex flex-wrap gap-2 justify-center">
                 {conversations.slice(0, 5).map((conv) => (
                   <button
                     key={conv.id}
@@ -452,7 +435,7 @@ export default function ChatPage() {
                       setActiveConversation(conv.id);
                       await useChatStore.getState().loadConversation(conv.id);
                     }}
-                    className="px-3 py-1.5 rounded-full text-xs text-[var(--color-text-muted)] bg-white/[0.03] border border-[var(--color-border)] hover:bg-white/[0.06] hover:text-[var(--color-text)] transition-colors truncate max-w-[200px]"
+                    className="px-3 py-1.5 rounded-lg text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] transition-all truncate max-w-[180px]"
                   >
                     {conv.title}
                   </button>
@@ -460,38 +443,35 @@ export default function ChatPage() {
                 {conversations.length > 5 && (
                   <button
                     onClick={() => setHistoryOpen(true)}
-                    className="px-3 py-1.5 rounded-full text-xs text-[var(--color-accent)] bg-[var(--color-accent)]/10 hover:bg-[var(--color-accent)]/20 transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-[11px] text-[var(--color-accent-hover)] bg-[var(--color-accent-subtle)] hover:bg-[var(--color-accent)]/20 transition-all"
                   >
                     View all
                   </button>
                 )}
               </div>
             )}
-
-            <p className="text-center text-xs text-[var(--color-text-muted)]/50 mt-6">
-              Drop files here to start a conversation
-            </p>
           </div>
         </div>
       ) : (
         /* ═══ Conversation Messages ═══ */
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
-          {activeConversation.messages
-            .filter((m) => m.role !== "system")
-            .map((msg) => <MessageBubble key={msg.id} message={msg} />)}
-          <div ref={messagesEndRef} />
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
+            {activeConversation.messages
+              .filter((m) => m.role !== "system")
+              .map((msg) => <MessageBubble key={msg.id} message={msg} />)}
+            <div ref={messagesEndRef} />
+          </div>
         </div>
       )}
 
       {/* ═══ Work Mode Panel ═══ */}
       {!isLaunchpad && <WorkModePanel />}
 
-      {/* ═══ Conversation Input (only when in active conversation) ═══ */}
+      {/* ═══ Conversation Input ═══ */}
       {!isLaunchpad && (
         <>
-          {/* Attached image preview */}
           {attachedImage && (
-            <div className="px-4 pb-2">
+            <div className="px-6 pb-2">
               <div className="max-w-3xl mx-auto">
                 <ImageUpload
                   onImageSelected={setAttachedImage}
@@ -503,10 +483,9 @@ export default function ChatPage() {
             </div>
           )}
 
-          {/* Input area */}
-          <div className="border-t border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-4">
+          <div className="px-6 py-5 bg-gradient-to-t from-[var(--color-bg)] via-[var(--color-bg)] to-transparent">
             <div className="max-w-3xl mx-auto">
-              <div className="relative rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] focus-within:border-[var(--color-accent)] focus-within:shadow-[0_0_0_2px_rgba(59,130,246,0.1)] transition-all">
+              <div className="hero-input relative">
                 <textarea
                   ref={isLaunchpad ? undefined : inputRef}
                   autoFocus
@@ -523,19 +502,14 @@ export default function ChatPage() {
                       if (!isStreaming && input.trim()) handleSend();
                     }
                   }}
-                  placeholder={
-                    attachedImage
-                      ? "Ask about the image..."
-                      : "Message Sovereign AI..."
-                  }
+                  placeholder={attachedImage ? "Ask about the image..." : "Message..."}
                   disabled={isStreaming}
                   rows={1}
-                  className="w-full bg-transparent px-4 pt-3 pb-11 text-sm resize-none focus:outline-none placeholder:text-[var(--color-text-muted)]/60 max-h-[300px]"
+                  className="w-full bg-transparent px-5 pt-4 pb-13 text-[15px] resize-none focus:outline-none placeholder:text-[var(--color-text-muted)] max-h-[300px]"
                   style={{ border: "none", boxShadow: "none" }}
                 />
 
-                {/* Bottom bar inside input */}
-                <div className="absolute bottom-0 left-0 right-0 px-3 py-2 flex items-center gap-1.5">
+                <div className="absolute bottom-0 left-0 right-0 px-4 py-3 flex items-center gap-2">
                   {!attachedImage && (
                     <ImageUpload
                       onImageSelected={setAttachedImage}
@@ -544,28 +518,25 @@ export default function ChatPage() {
                       disabled={isStreaming}
                     />
                   )}
-                  <VoiceInput
-                    onTranscription={handleVoiceTranscription}
-                    disabled={isStreaming}
-                  />
+                  <VoiceInput onTranscription={handleVoiceTranscription} disabled={isStreaming} />
                   {agentMode && (
-                    <span className="text-xs text-green-400 px-1.5">Agent</span>
+                    <span className="text-[11px] text-emerald-400/80 font-medium px-1">Agent</span>
                   )}
                   <div className="ml-auto">
                     {isStreaming ? (
                       <button
                         onClick={handleStop}
-                        className="p-2 rounded-lg bg-[var(--color-danger)] hover:bg-red-600 text-white transition-colors"
+                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-red-500/90 hover:bg-red-500 text-white"
                       >
-                        <Square size={14} />
+                        <Square size={13} />
                       </button>
                     ) : (
                       <button
                         onClick={handleSend}
                         disabled={!input.trim()}
-                        className="p-2 rounded-lg btn-gradient disabled:opacity-30 disabled:transform-none"
+                        className="w-9 h-9 flex items-center justify-center rounded-xl btn-gradient disabled:opacity-20"
                       >
-                        <Send size={16} />
+                        <Send size={15} />
                       </button>
                     )}
                   </div>
