@@ -117,6 +117,21 @@ Charts are rendered client-side using Recharts, inspired by the Metis project's 
 | `generate_image` | multimodal | No |
 | `code_analyze` / `code_explain` / `code_generate` | code_execution | No |
 | `git_diff` / `git_commit_message` | code_execution | No |
+| `document_convert` | document_processing | No |
+| `document_generate` | document_processing | No |
+| `document_merge_data` | document_processing | No |
+| `document_extract_text` | document_processing | No |
+
+### Document Processing (LibreOffice Headless)
+Four tools provide structured document operations via LibreOffice running headlessly in Docker:
+- **`document_convert`** — Format conversion (DOCX→PDF, ODT→HTML, etc.)
+- **`document_generate`** — Create documents from structured sections (title + heading/body pairs)
+- **`document_merge_data`** — Template rendering with `{{placeholder}}` substitution
+- **`document_extract_text`** — Extract plain text from PDF, DOCX, ODT, PPTX, XLSX
+
+All operations are workspace-scoped and return relative file paths. The LLM can chain these with RAG search and data analysis to produce complete report workflows.
+
+**Key files**: `services/tool_executor.py` (handlers), `services/tool_registry.py` (specs)
 
 ### Python Exec Enhancements
 - **Auto-print**: AST-based detection of dangling expressions — automatically wraps with `print()` (like IPython/Jupyter)

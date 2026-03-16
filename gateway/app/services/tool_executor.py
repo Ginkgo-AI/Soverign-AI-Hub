@@ -631,6 +631,301 @@ async def _handle_git_commit_message(
 
 
 # ---------------------------------------------------------------------------
+# Document processing tool handler implementations (LibreOffice headless)
+# ---------------------------------------------------------------------------
+
+# LibreOffice binary — configurable via env var
+_LIBREOFFICE_BIN = os.environ.get("LIBREOFFICE_BIN", "libreoffice")
+
+
+async def _run_libreoffice(
+    args: list[str],
+    timeout: int = 120,
+) -> tuple[int, str, str]:
+    """Run LibreOffice headless with the given arguments.
+
+    Uses create_subprocess_exec with an explicit argument list to avoid
+    shell injection.  The caller passes only validated/workspace-scoped
+    paths.
+    """
+    cmd = [
+        _LIBREOFFICE_BIN,
+        "--headless",
+        "--invisible",
+        "--nocrashreport",
+        "--nodefault",
+        "--nofirststartwizard",
+        "--nologo",
+        "--norestore",
+        *args,
+    ]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env={**os.environ, "HOME": str(WORKSPACE_ROOT)},
+    )
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    return (
+        proc.returncode or 0,
+        stdout.decode(errors="replace"),
+        stderr.decode(errors="replace"),
+    )
+
+
+async def _handle_document_convert(
+    input_path: str,
+    output_format: str,
+) -> dict[str, Any]:
+    """Convert a document between formats using LibreOffice headless."""
+    resolved_input = _resolve_workspace_path(input_path)
+    if not resolved_input.is_file():
+        return _make_result(success=False, error=f"Input file not found: {input_path}")
+
+    outdir = resolved_input.parent
+    start = time.time()
+    try:
+        returncode, stdout, stderr = await _run_libreoffice([
+            "--convert-to", output_format,
+            "--outdir", str(outdir),
+            str(resolved_input),
+        ])
+        duration = (time.time() - start) * 1000
+
+        if returncode != 0:
+            return _make_result(
+                success=False,
+                error=f"LibreOffice exited with code {returncode}: {stderr[:2048]}",
+                duration_ms=duration,
+            )
+
+        # Determine output filename (LibreOffice replaces extension)
+        out_name = resolved_input.stem + "." + output_format
+        out_path = outdir / out_name
+        if not out_path.exists():
+            return _make_result(
+                success=False,
+                error=f"Conversion produced no output file. Expected: {out_name}",
+                duration_ms=duration,
+            )
+
+        # Return workspace-relative path
+        rel_path = str(out_path.relative_to(WORKSPACE_ROOT.resolve()))
+        return _make_result(
+            success=True,
+            output={
+                "output_path": rel_path,
+                "format": output_format,
+                "size_bytes": out_path.stat().st_size,
+            },
+            duration_ms=duration,
+        )
+    except asyncio.TimeoutError:
+        return _make_result(success=False, error="LibreOffice conversion timed out after 120s")
+
+
+async def _handle_document_generate(
+    title: str,
+    sections: list[dict[str, str]],
+    output_format: str = "pdf",
+    filename: str = "document",
+) -> dict[str, Any]:
+    """Generate a formatted document from structured content via LibreOffice."""
+    import html as html_mod
+
+    # Build an HTML document from structured input
+    html_parts = [
+        "<!DOCTYPE html>",
+        '<html><head><meta charset="utf-8">',
+        "<style>",
+        "body { font-family: 'Liberation Serif', serif; margin: 40px; line-height: 1.6; }",
+        "h1 { color: #1a1a2e; border-bottom: 2px solid #16213e; padding-bottom: 8px; }",
+        "h2 { color: #16213e; margin-top: 24px; }",
+        "</style>",
+        f"<title>{html_mod.escape(title)}</title></head><body>",
+        f"<h1>{html_mod.escape(title)}</h1>",
+    ]
+    for section in sections:
+        heading = section.get("heading", "")
+        body = section.get("body", "")
+        html_parts.append(f"<h2>{html_mod.escape(heading)}</h2>")
+        # Body may contain intentional HTML tags for formatting
+        html_parts.append(f"<div>{body}</div>")
+    html_parts.append("</body></html>")
+    html_content = "\n".join(html_parts)
+
+    # Write HTML to workspace
+    WORKSPACE_ROOT.mkdir(parents=True, exist_ok=True)
+    safe_filename = re.sub(r"[^\w\-]", "_", filename)
+    html_path = WORKSPACE_ROOT / f"{safe_filename}_src.html"
+    html_path.write_text(html_content, encoding="utf-8")
+
+    start = time.time()
+    try:
+        returncode, stdout, stderr = await _run_libreoffice([
+            "--convert-to", output_format,
+            "--outdir", str(WORKSPACE_ROOT),
+            str(html_path),
+        ])
+        duration = (time.time() - start) * 1000
+
+        # Clean up source HTML
+        html_path.unlink(missing_ok=True)
+
+        if returncode != 0:
+            return _make_result(
+                success=False,
+                error=f"LibreOffice exited with code {returncode}: {stderr[:2048]}",
+                duration_ms=duration,
+            )
+
+        out_path = WORKSPACE_ROOT / f"{safe_filename}_src.{output_format}"
+        final_path = WORKSPACE_ROOT / f"{safe_filename}.{output_format}"
+        if out_path.exists():
+            out_path.rename(final_path)
+        elif not final_path.exists():
+            return _make_result(
+                success=False,
+                error="Document generation produced no output file",
+                duration_ms=duration,
+            )
+
+        rel_path = str(final_path.relative_to(WORKSPACE_ROOT.resolve()))
+        return _make_result(
+            success=True,
+            output={
+                "output_path": rel_path,
+                "format": output_format,
+                "size_bytes": final_path.stat().st_size,
+                "title": title,
+                "section_count": len(sections),
+            },
+            duration_ms=duration,
+        )
+    except asyncio.TimeoutError:
+        html_path.unlink(missing_ok=True)
+        return _make_result(success=False, error="Document generation timed out after 120s")
+
+
+async def _handle_document_merge_data(
+    template: str,
+    data: dict[str, Any],
+    output_format: str = "pdf",
+    filename: str = "merged",
+) -> dict[str, Any]:
+    """Merge data into an HTML template and render via LibreOffice."""
+    # Replace {{placeholder}} with data values
+    rendered = template
+    for key, value in data.items():
+        rendered = rendered.replace(f"{{{{{key}}}}}", str(value))
+
+    # Check for unreplaced placeholders
+    unreplaced = re.findall(r"\{\{(\w+)\}\}", rendered)
+
+    WORKSPACE_ROOT.mkdir(parents=True, exist_ok=True)
+    safe_filename = re.sub(r"[^\w\-]", "_", filename)
+    html_path = WORKSPACE_ROOT / f"{safe_filename}_merge.html"
+    html_path.write_text(rendered, encoding="utf-8")
+
+    start = time.time()
+    try:
+        returncode, stdout, stderr = await _run_libreoffice([
+            "--convert-to", output_format,
+            "--outdir", str(WORKSPACE_ROOT),
+            str(html_path),
+        ])
+        duration = (time.time() - start) * 1000
+
+        html_path.unlink(missing_ok=True)
+
+        if returncode != 0:
+            return _make_result(
+                success=False,
+                error=f"LibreOffice exited with code {returncode}: {stderr[:2048]}",
+                duration_ms=duration,
+            )
+
+        out_path = WORKSPACE_ROOT / f"{safe_filename}_merge.{output_format}"
+        final_path = WORKSPACE_ROOT / f"{safe_filename}.{output_format}"
+        if out_path.exists():
+            out_path.rename(final_path)
+        elif not final_path.exists():
+            return _make_result(
+                success=False,
+                error="Merge produced no output file",
+                duration_ms=duration,
+            )
+
+        result = _make_result(
+            success=True,
+            output={
+                "output_path": str(final_path.relative_to(WORKSPACE_ROOT.resolve())),
+                "format": output_format,
+                "size_bytes": final_path.stat().st_size,
+                "data_keys_used": list(data.keys()),
+            },
+            duration_ms=duration,
+        )
+        if unreplaced:
+            result["output"]["unreplaced_placeholders"] = unreplaced
+        return result
+    except asyncio.TimeoutError:
+        html_path.unlink(missing_ok=True)
+        return _make_result(success=False, error="Document merge timed out after 120s")
+
+
+async def _handle_document_extract_text(
+    input_path: str,
+) -> dict[str, Any]:
+    """Extract plain text from a document using LibreOffice."""
+    resolved_input = _resolve_workspace_path(input_path)
+    if not resolved_input.is_file():
+        return _make_result(success=False, error=f"Input file not found: {input_path}")
+
+    start = time.time()
+    try:
+        returncode, stdout, stderr = await _run_libreoffice([
+            "--convert-to", "txt:Text (encoded):UTF8",
+            "--outdir", str(resolved_input.parent),
+            str(resolved_input),
+        ])
+        duration = (time.time() - start) * 1000
+
+        if returncode != 0:
+            return _make_result(
+                success=False,
+                error=f"LibreOffice exited with code {returncode}: {stderr[:2048]}",
+                duration_ms=duration,
+            )
+
+        txt_path = resolved_input.with_suffix(".txt")
+        if not txt_path.exists():
+            return _make_result(
+                success=False,
+                error="Text extraction produced no output file",
+                duration_ms=duration,
+            )
+
+        text = txt_path.read_text(encoding="utf-8", errors="replace")[:32_768]
+
+        # Clean up the generated txt if the source wasn't already .txt
+        if resolved_input.suffix.lower() != ".txt":
+            txt_path.unlink(missing_ok=True)
+
+        return _make_result(
+            success=True,
+            output={
+                "text": text,
+                "char_count": len(text),
+                "source": input_path,
+            },
+            duration_ms=duration,
+        )
+    except asyncio.TimeoutError:
+        return _make_result(success=False, error="Text extraction timed out after 120s")
+
+
+# ---------------------------------------------------------------------------
 # Map spec names to handler functions
 # ---------------------------------------------------------------------------
 
@@ -652,6 +947,10 @@ _HANDLER_MAP: dict[str, Any] = {
     "code_generate": _handle_code_generate,
     "git_diff": _handle_git_diff,
     "git_commit_message": _handle_git_commit_message,
+    "document_convert": _handle_document_convert,
+    "document_generate": _handle_document_generate,
+    "document_merge_data": _handle_document_merge_data,
+    "document_extract_text": _handle_document_extract_text,
 }
 
 

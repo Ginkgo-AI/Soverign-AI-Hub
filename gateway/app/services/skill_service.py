@@ -77,18 +77,49 @@ _DEFAULT_SKILLS: list[dict[str, Any]] = [
         "name": "Report Writer",
         "description": "Generate structured reports from data and documents",
         "category": "writing",
-        "catalog_summary": "Draft reports, memos, and structured documents",
+        "catalog_summary": "Draft reports, memos, and structured documents as PDF/DOCX",
         "icon": "file-text",
         "system_prompt": (
             "You are a professional report writer. Generate clear, well-structured reports "
             "with executive summaries, detailed findings, and recommendations. Use data from "
-            "searches and queries to support your points. Adapt tone to the audience."
+            "searches and queries to support your points. Adapt tone to the audience. "
+            "Use the document_generate tool to produce polished PDF or DOCX reports. "
+            "Use document_merge_data for templated reports with dynamic data."
         ),
-        "tool_configuration": ["rag_search", "sql_query", "calculator", "file_write"],
+        "tool_configuration": [
+            "rag_search", "sql_query", "calculator", "file_write",
+            "document_generate", "document_merge_data",
+        ],
         "example_prompts": [
             "Write a weekly status report based on recent activities",
             "Draft a technical assessment of our AI infrastructure",
-            "Create an executive summary of the Q2 findings",
+            "Create an executive summary of the Q2 findings as a PDF",
+        ],
+    },
+    {
+        "name": "Document Producer",
+        "description": "Convert, generate, and extract text from documents (PDF, DOCX, ODT)",
+        "category": "document",
+        "catalog_summary": "Convert formats, generate PDFs, extract text, merge templates",
+        "icon": "file-output",
+        "system_prompt": (
+            "You are a document processing specialist. You can convert documents between formats "
+            "(DOCX to PDF, ODT to HTML, etc.), generate new documents from structured content, "
+            "merge data into templates to produce form letters or certificates, and extract text "
+            "from uploaded documents. Use the document_convert tool for format conversion, "
+            "document_generate for creating new documents from sections, document_merge_data "
+            "for template-based generation, and document_extract_text to read document contents. "
+            "Always confirm the output file path so the user can download the result."
+        ),
+        "tool_configuration": [
+            "document_convert", "document_generate", "document_merge_data",
+            "document_extract_text", "file_read", "file_write",
+        ],
+        "example_prompts": [
+            "Convert this DOCX file to PDF",
+            "Generate a briefing document with these sections as a PDF",
+            "Extract the text from the uploaded spreadsheet",
+            "Create a certificate template and fill it with these names",
         ],
     },
     {

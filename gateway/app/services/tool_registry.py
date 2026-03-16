@@ -593,6 +593,145 @@ GIT_COMMIT_MESSAGE_SPEC = ToolSpec(
 
 
 # ---------------------------------------------------------------------------
+# Document processing tool specifications
+# ---------------------------------------------------------------------------
+
+DOCUMENT_CONVERT_SPEC = ToolSpec(
+    name="document_convert",
+    description=(
+        "Convert documents between formats using LibreOffice headless. "
+        "Supports: DOCX/DOC/ODT/RTF/TXT/HTML/CSV → PDF, DOCX, ODT, HTML, TXT, RTF, XLSX, CSV. "
+        "Input file must exist in the workspace. Returns the output file path."
+    ),
+    category="document_processing",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "input_path": {
+                "type": "string",
+                "description": "Relative path to the source file in the workspace",
+            },
+            "output_format": {
+                "type": "string",
+                "description": "Target format",
+                "enum": ["pdf", "docx", "odt", "html", "txt", "rtf", "xlsx", "csv"],
+            },
+        },
+        "required": ["input_path", "output_format"],
+    },
+    requires_approval=False,
+)
+
+DOCUMENT_GENERATE_SPEC = ToolSpec(
+    name="document_generate",
+    description=(
+        "Generate a document from structured content. Provide a title, body sections "
+        "(each with a heading and text), and an output format. The tool creates a well-formatted "
+        "document using LibreOffice. Body text supports basic HTML tags: <b>, <i>, <ul>, <li>, <br>, <table>."
+    ),
+    category="document_processing",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "title": {
+                "type": "string",
+                "description": "Document title",
+            },
+            "sections": {
+                "type": "array",
+                "description": "List of document sections",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "heading": {
+                            "type": "string",
+                            "description": "Section heading",
+                        },
+                        "body": {
+                            "type": "string",
+                            "description": "Section body text (supports basic HTML tags)",
+                        },
+                    },
+                    "required": ["heading", "body"],
+                },
+            },
+            "output_format": {
+                "type": "string",
+                "description": "Output format for the generated document",
+                "enum": ["pdf", "docx", "odt", "html"],
+                "default": "pdf",
+            },
+            "filename": {
+                "type": "string",
+                "description": "Output filename without extension (default: 'document')",
+                "default": "document",
+            },
+        },
+        "required": ["title", "sections"],
+    },
+    requires_approval=False,
+)
+
+DOCUMENT_MERGE_DATA_SPEC = ToolSpec(
+    name="document_merge_data",
+    description=(
+        "Merge data into a document template. Provide an HTML template string with "
+        "{{placeholder}} variables and a data dict. The tool replaces placeholders, "
+        "renders through LibreOffice, and returns the output file. "
+        "Useful for form letters, certificates, reports with dynamic data."
+    ),
+    category="document_processing",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "template": {
+                "type": "string",
+                "description": "HTML template with {{placeholder}} variables",
+            },
+            "data": {
+                "type": "object",
+                "description": "Key-value pairs to substitute into the template",
+            },
+            "output_format": {
+                "type": "string",
+                "description": "Output format",
+                "enum": ["pdf", "docx", "odt", "html"],
+                "default": "pdf",
+            },
+            "filename": {
+                "type": "string",
+                "description": "Output filename without extension",
+                "default": "merged",
+            },
+        },
+        "required": ["template", "data"],
+    },
+    requires_approval=False,
+)
+
+DOCUMENT_EXTRACT_TEXT_SPEC = ToolSpec(
+    name="document_extract_text",
+    description=(
+        "Extract plain text content from a document (PDF, DOCX, ODT, PPTX, XLSX). "
+        "Uses LibreOffice to convert to text and returns the content. "
+        "Useful for reading uploaded documents that aren't plain text."
+    ),
+    category="document_processing",
+    parameters_schema={
+        "type": "object",
+        "properties": {
+            "input_path": {
+                "type": "string",
+                "description": "Relative path to the document in the workspace",
+            },
+        },
+        "required": ["input_path"],
+    },
+    requires_approval=False,
+)
+
+
+# ---------------------------------------------------------------------------
 # Convenience list of all built-in specs (handler wiring happens in
 # tool_executor.py which imports this list).
 # ---------------------------------------------------------------------------
@@ -615,4 +754,8 @@ BUILTIN_TOOL_SPECS: list[ToolSpec] = [
     CODE_GENERATE_SPEC,
     GIT_DIFF_SPEC,
     GIT_COMMIT_MESSAGE_SPEC,
+    DOCUMENT_CONVERT_SPEC,
+    DOCUMENT_GENERATE_SPEC,
+    DOCUMENT_MERGE_DATA_SPEC,
+    DOCUMENT_EXTRACT_TEXT_SPEC,
 ]

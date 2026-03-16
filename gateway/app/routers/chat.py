@@ -63,6 +63,10 @@ CHAT_DEFAULT_TOOLS = [
     "code_generate",
     "python_exec",
     "bash_exec",
+    "document_convert",
+    "document_generate",
+    "document_merge_data",
+    "document_extract_text",
 ]
 
 
